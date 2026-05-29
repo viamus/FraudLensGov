@@ -1,40 +1,112 @@
 # FraudLensGov
 
-FraudLensGov is an open-source project for reading public procurement and bidding data, organizing it into auditable signals, and using ChatGPT-assisted analysis to highlight potential fraud-risk patterns.
+FraudLensGov is an open-source project for reading public procurement and bidding data, organizing it into auditable signals, and using statistical analysis, RAG, and GenAI to highlight potential fraud-risk patterns.
 
-The goal is to support transparency, investigative triage, and public-interest oversight. The project is not meant to accuse people or organizations automatically; it should surface explainable indicators that can be reviewed by humans with the proper context.
+The project helps humans prioritize review. It does not automatically accuse people or organizations of fraud.
 
-## What This Project Will Do
+## Prototype
 
-- Ingest data from public procurement APIs and open government portals.
-- Normalize bidding, supplier, contract, agency, and timeline data.
-- Detect suspicious patterns such as repeated winners, unusual price deltas, fragmented purchases, supplier clustering, and deadline anomalies.
-- Use ChatGPT to generate structured, explainable risk analysis from the collected evidence.
-- Produce transparent reports with sources, reasoning, confidence levels, and review notes.
+The current prototype uses only the Python standard library:
 
-## Early Technical Direction
+- Public API connectors for PNCP and Compras.gov.br.
+- Optional Google Programmable Search discovery for local procurement portals.
+- Local SQLite storage for development.
+- Statistical anomaly detection with an initial nearest-neighbor comparable-price strategy.
+- Optional OpenAI Responses API explanations.
+- Local dashboard served from Python.
 
-The initial implementation will likely use Python because it is a strong fit for API ingestion, data processing, anomaly detection, and AI-assisted analysis.
+## Run Locally
 
-Possible stack:
+Requires Python 3.11+.
 
-- Python for ingestion, enrichment, and risk analysis.
-- FastAPI or a CLI for the first usable interface.
-- PostgreSQL or DuckDB for structured storage and analytical queries.
-- OpenAI API for explainable language-model analysis.
-- Docker for reproducible local execution.
+```powershell
+python -m fraud_lens_gov ingest-sample --analyze
+python -m fraud_lens_gov serve
+```
 
-## Guiding Principles
+Open:
 
-- **Evidence first:** every insight should trace back to source data.
-- **Human review required:** the system flags risk signals, not final legal conclusions.
-- **Transparency by design:** prompts, rules, thresholds, and assumptions should be inspectable.
-- **Public-good orientation:** the project should help auditors, journalists, civic technologists, and researchers work faster and more responsibly.
+```text
+http://127.0.0.1:8080
+```
+
+Or start with sample bootstrap in one command:
+
+```powershell
+python -m fraud_lens_gov serve --bootstrap-sample
+```
+
+## Ingest Public APIs
+
+PNCP:
+
+```powershell
+python -m fraud_lens_gov ingest-pncp --start 20240501 --end 20240502 --modality 6 --analyze
+```
+
+Compras.gov.br:
+
+```powershell
+python -m fraud_lens_gov ingest-compras --start 2025-09-01 --end 2025-09-02 --analyze
+```
+
+Google Programmable Search for local portal discovery:
+
+```powershell
+$env:GOOGLE_API_KEY="..."
+$env:GOOGLE_SEARCH_ENGINE_ID="..."
+python -m fraud_lens_gov discover-portals "portal transparencia licitacoes prefeitura"
+```
+
+OpenAI alert explanations:
+
+```powershell
+$env:OPENAI_API_KEY="..."
+python -m fraud_lens_gov explain-alerts --limit 10
+```
+
+Without `OPENAI_API_KEY`, the app keeps deterministic local explanations.
+
+## RAG Direction
+
+FraudLensGov is not meant to be tied to a single chat model. The intended AI layer is broader:
+
+- RAG over edital, termo de referencia, contract attachments, and historical decisions.
+- Semantic normalization of item categories, SKUs, CATMAT/CATSER, NCM, and free-text descriptions.
+- Cluster explanation for groups of comparable items and suppliers.
+- Auditable alert narratives that separate source facts, statistical inference, and hypotheses.
+
+## Architecture
+
+```text
+PNCP / Compras.gov.br / Portais locais / Google discovery
+        |
+        v
+Ingestao + normalizacao dos itens
+        |
+        v
+Base historica de precos por item, regiao, orgao, fornecedor e data
+        |
+        v
+Motor estatistico de anomalias, clusters e outliers
+        |
+        v
+RAG + GenAI explicando o alerta e lendo edital/termo de referencia
+        |
+        v
+Dashboard de risco + relatorio auditavel
+```
+
+Read the full implementation plan in [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+
+## Supply-Chain Posture
+
+The prototype intentionally has no third-party runtime dependencies. When dependencies are added, the project should pin exact versions, use a lockfile, audit packages, and avoid packages for trivial utilities.
 
 ## Status
 
-This repository is in the planning and early bootstrap stage.
+Early prototype.
 
 ## License
 
-License to be defined.
+MIT. See [LICENSE](LICENSE).

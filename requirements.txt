@@ -1,0 +1,2 @@
+# Runtime dependencies are intentionally empty for the prototype.
+# The app uses only the Python standard library to reduce supply-chain risk.

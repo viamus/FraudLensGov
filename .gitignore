@@ -23,6 +23,11 @@ build/
 dist/
 *.egg-info/
 
+# Local prototype data
+data/
+*.sqlite
+*.sqlite3
+
 # Editors and OS
 .idea/
 .vscode/
