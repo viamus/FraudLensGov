@@ -6,7 +6,7 @@ The project helps humans prioritize review. It does not automatically accuse peo
 
 ## Prototype
 
-The current prototype uses only the Python standard library:
+The current prototype uses a small, pinned Python stack:
 
 - Public API connectors for PNCP and Compras.gov.br.
 - Optional Google Programmable Search discovery for local procurement portals.
@@ -15,27 +15,29 @@ The current prototype uses only the Python standard library:
 - Statistical anomaly detection with an initial nearest-neighbor comparable-price strategy.
 - KNN-style lexical clusters persisted locally for comparable item review.
 - Optional OpenAI Responses API explanations.
-- Local dashboard served from Python.
+- Django 5.2 LTS dashboard with a dark operational audit UI.
+- Legacy standard-library dashboard still available with `--legacy-webapp`.
 
 ## Run Locally
 
 Requires Python 3.11+.
 
 ```powershell
+python -m pip install -r requirements.txt
 python -m fraud_lens_gov ingest-sample --analyze --cluster
-python -m fraud_lens_gov serve
+python -m fraud_lens_gov serve --host 127.0.0.1 --port 8097
 ```
 
 Open:
 
 ```text
-http://127.0.0.1:8080
+http://127.0.0.1:8097
 ```
 
 Or start with sample bootstrap in one command:
 
 ```powershell
-python -m fraud_lens_gov serve --bootstrap-sample
+python -m fraud_lens_gov serve --bootstrap-sample --host 127.0.0.1 --port 8097
 ```
 
 ## Ingest Public APIs
@@ -152,7 +154,9 @@ Read the full implementation plan in [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMEN
 
 ## Supply-Chain Posture
 
-The prototype intentionally has no third-party runtime dependencies. When dependencies are added, the project should pin exact versions, use a lockfile, audit packages, and avoid packages for trivial utilities.
+The runtime dependency surface is intentionally small. Django is the product web dependency, pinned exactly in `requirements.txt` along with its direct runtime dependencies. The ingestion, normalization, statistical analysis, clustering, export, and RAG prototype code remain standard-library Python.
+
+Next hardening steps are a lockfile, package audit, Dependabot/GitHub security alerts, and avoiding packages for trivial utilities.
 
 ## Status
 

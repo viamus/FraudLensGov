@@ -8,7 +8,9 @@ license = "MIT"
 authors = [
   { name = "FraudLensGov contributors" }
 ]
-dependencies = []
+dependencies = [
+  "Django==5.2.14",
+]
 
 [project.scripts]
 fraud-lens-gov = "fraud_lens_gov.__main__:main"

@@ -99,33 +99,36 @@ Componentes:
 - `anomalies`: regras estatisticas explicaveis, outliers e comparacao por vizinhos proximos.
 - `rag`: recuperacao de trechos de edital, termo de referencia e historico de precos.
 - `genai`: explicacao de alertas via API de modelo configuravel.
-- `webapp`: dashboard local.
+- `audit_ui`: dashboard local em Django, APIs JSON operacionais e fila de revisao KNN.
 
 O prototipo ja inclui um modulo RAG local sem dependencias externas para chunking e recuperacao lexical. Ele serve como contrato de arquitetura antes da troca por embeddings.
 
 ## 4. Escolha de Tecnologia
 
-### Agora: Python puro + SQLite + dashboard local
+### Agora: Python core + Django + SQLite
 
 Motivos:
 
-- Menor superficie de supply chain: zero dependencias externas de runtime.
+- Superficie pequena de supply chain: Django 5.2 LTS como dependencia web principal, com versoes exatas.
 - Python e adequado para ingestao, estatistica, automacao e integracao com IA.
 - SQLite e leve para prototipo local, reproduzivel e facil de versionar em ambiente de desenvolvimento.
-- O dashboard via servidor HTTP padrao reduz complexidade inicial.
+- Django entrega rotas, templates, static files, testes de view e uma base natural para evoluir para ORM, admin e autenticacao.
+- O core de ingestao, normalizacao, estatistica, clustering, exportacao e RAG prototipo continua em Python de biblioteca padrao.
 
-### Proxima etapa: Django + Postgres + fila
+O Django foi introduzido primeiro como casca de produto: ele le a mesma base SQLite via adapter `Storage`, preservando Bronze/Silver/Golden e evitando uma migracao de dados grande antes de estabilizar o modelo.
+
+### Proxima etapa: Postgres + fila
 
 Quando o volume crescer:
 
-- Django para ORM, migrations, admin, autenticacao e telas operacionais de revisao.
+- Django ORM, migrations, admin, autenticacao e permissoes por perfil.
 - Postgres para historico, indices, particionamento e consultas analiticas.
 - Celery, RQ ou Dramatiq para workers de Bronze, Silver, Golden e RAG.
 - Redis ou Postgres como backend de fila conforme o ambiente.
 - Django REST Framework apenas quando houver API externa de consumo.
 - Playwright apenas se algum portal local exigir navegacao, com isolamento e limites.
 
-O prototipo atual mantem o core em Python puro para reduzir supply chain, mas os conceitos ja foram separados para migrar naturalmente para apps Django:
+O prototipo atual mantem o core em Python puro para reduzir acoplamento, mas os conceitos ja foram separados para migrar naturalmente para apps Django:
 
 - `bronze_records`: captura rapida dos 10 anos sem enriquecimento.
 - `procurement_items`: camada Silver normalizada e enriquecida.
@@ -235,14 +238,15 @@ Guardrails:
 
 ## 8. Seguranca de Dependencias
 
-Politica inicial:
+Politica atual:
 
-- Prototipo sem dependencias externas de runtime.
-- `requirements.txt` vazio por design.
+- Django 5.2 LTS como dependencia web principal.
+- Dependencias de runtime fixadas com versoes exatas em `requirements.txt`.
+- Core de dados mantido sem pacotes externos sempre que a biblioteca padrao for suficiente.
 - Variaveis sensiveis somente via `.env` local ou ambiente.
 - Nunca commitar chaves.
 
-Ao adicionar dependencias:
+Ao adicionar novas dependencias:
 
 - Fixar versoes exatas.
 - Preferir pacotes amplamente usados e mantidos.
@@ -258,9 +262,9 @@ Ao adicionar dependencias:
 
 - Repositorio publico.
 - README inicial.
-- Prototipo local sem dependencias externas.
+- Core local com baixa dependencia externa e versoes web fixadas.
 - Ingestao sample, PNCP, Compras.gov.br e descoberta Google.
-- Dashboard local.
+- Dashboard local em Django com tema escuro operacional.
 - Motor inicial de anomalias.
 
 ### Fase 1 - Dados Reais
@@ -312,8 +316,9 @@ Ao adicionar dependencias:
 Carregar dados de exemplo, analisar e abrir dashboard:
 
 ```powershell
+python -m pip install -r requirements.txt
 python -m fraud_lens_gov ingest-sample --analyze --cluster
-python -m fraud_lens_gov serve
+python -m fraud_lens_gov serve --host 127.0.0.1 --port 8097
 ```
 
 Ingerir PNCP:

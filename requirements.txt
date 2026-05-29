@@ -1,2 +1,5 @@
-# Runtime dependencies are intentionally empty for the prototype.
-# The app uses only the Python standard library to reduce supply-chain risk.
+# Runtime dependencies are pinned exactly to reduce supply-chain drift.
+asgiref==3.11.1
+Django==5.2.14
+sqlparse==0.5.5
+tzdata==2025.3

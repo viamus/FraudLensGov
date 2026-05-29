@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from datetime import date, timedelta
@@ -16,7 +17,6 @@ from .sources.compras_gov import ComprasGovClient
 from .sources.google_search import GoogleProgrammableSearchClient
 from .sources.pncp import PncpClient
 from .storage import Storage
-from .webapp import serve
 
 
 DEFAULT_DB = Path("data/fraudlens.sqlite")
@@ -120,6 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
     web.add_argument("--host", default="127.0.0.1")
     web.add_argument("--port", type=int, default=8080)
     web.add_argument("--bootstrap-sample", action="store_true", help="Load sample data if the database is empty.")
+    web.add_argument("--legacy-webapp", action="store_true", help="Run the pre-Django prototype web server.")
 
     return parser
 
@@ -285,6 +286,16 @@ def _build_golden_cli_args(args: argparse.Namespace) -> list[str]:
     if args.cluster:
         result.append("--cluster")
     return result
+
+
+def _serve_django(db_path: str, host: str, port: int) -> None:
+    os.environ["FRAUDLENS_DB"] = str(Path(db_path).resolve())
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "fraudlensgov_site.settings")
+    try:
+        from django.core.management import execute_from_command_line
+    except ImportError as exc:
+        raise SystemExit("Django is required. Install pinned dependencies with: python -m pip install -r requirements.txt") from exc
+    execute_from_command_line(["manage.py", "runserver", f"{host}:{port}", "--noreload"])
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -721,7 +732,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.bootstrap_sample and storage.count_items() == 0:
             storage.upsert_items(SAMPLE_ITEMS)
             _analyze(storage)
-        serve(storage, host=args.host, port=args.port)
+        if args.legacy_webapp:
+            from .webapp import serve as serve_legacy
+
+            serve_legacy(storage, host=args.host, port=args.port)
+        else:
+            _serve_django(args.db, args.host, args.port)
         return 0
 
     raise SystemExit(f"Unknown command: {command}")
