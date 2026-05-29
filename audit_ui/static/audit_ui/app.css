@@ -528,21 +528,30 @@ svg {
 }
 
 .guidance-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.18fr) minmax(320px, .52fr);
-  gap: 16px;
-  align-items: stretch;
+  display: block;
 }
 
-.guidance-panel,
-.glossary-panel {
-  padding: 14px;
+.minimal-guidance {
+  padding: 0;
+}
+
+.guidance-main {
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, .42fr);
+  gap: 14px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.guidance-summary {
+  min-width: 0;
 }
 
 .guidance-kicker {
+  margin-bottom: 8px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   color: var(--soft);
   font-size: var(--md-sys-type-label-small);
@@ -551,15 +560,12 @@ svg {
   text-transform: uppercase;
 }
 
-.guidance-body {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, .58fr);
-  gap: 12px;
-  align-items: end;
+.guidance-kicker span + span {
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
 }
 
-.guidance-body h2,
+.guidance-summary h2,
 .glossary-head h2 {
   margin: 4px 0 0;
   color: var(--ink);
@@ -567,7 +573,7 @@ svg {
   line-height: 1.2;
 }
 
-.guidance-body p:not(.eyebrow),
+.guidance-summary p:not(.eyebrow),
 .guidance-limit,
 .panel-context,
 .term-list dd {
@@ -576,8 +582,8 @@ svg {
   line-height: 1.55;
 }
 
-.guidance-body p:not(.eyebrow) {
-  max-width: 860px;
+.guidance-summary p:not(.eyebrow) {
+  max-width: 760px;
   margin: 6px 0 0;
 }
 
@@ -592,7 +598,7 @@ svg {
 }
 
 .guidance-facts div {
-  min-height: 66px;
+  min-height: 58px;
   padding: 10px;
   display: grid;
   align-content: space-between;
@@ -610,15 +616,76 @@ svg {
 
 .guidance-facts strong {
   color: var(--ink);
-  font-size: var(--md-sys-type-title-large);
+  font-size: var(--md-sys-type-title-medium);
   line-height: 1;
   overflow-wrap: anywhere;
 }
 
+.guidance-footer {
+  padding: 10px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  background: var(--md-sys-color-surface-container-low);
+}
+
+.guidance-limit {
+  margin: 0;
+  color: var(--soft);
+  font-size: var(--md-sys-type-body-small);
+}
+
+.guidance-details {
+  position: relative;
+}
+
+.guidance-details summary {
+  min-height: 36px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--md-sys-color-primary);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--md-sys-type-label-medium);
+  font-weight: 760;
+  list-style: none;
+}
+
+.guidance-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.guidance-details summary:hover {
+  border-color: var(--accent);
+  background: var(--md-sys-state-hover);
+}
+
+.guidance-detail-grid {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 9;
+  width: min(760px, calc(100vw - var(--sidebar-collapsed) - 48px));
+  max-height: min(480px, calc(100vh - 390px));
+  padding: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, .75fr);
+  gap: 12px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--md-sys-color-surface-container-high);
+  box-shadow: var(--md-sys-elevation-level3);
+}
+
 .guidance-reading {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
+  margin: 0;
+  padding: 0;
 }
 
 .guidance-reading ul {
@@ -643,18 +710,10 @@ svg {
   line-height: 1.5;
 }
 
-.guidance-limit {
-  margin: 12px 0 0;
-  padding: 10px;
-  border: 1px solid rgba(230, 200, 117, .32);
-  border-radius: var(--radius);
-  background: rgba(230, 200, 117, .08);
-}
-
 .glossary-panel {
   display: grid;
   grid-template-rows: auto 1fr;
-  gap: 14px;
+  gap: 10px;
 }
 
 .glossary-head h2 {
@@ -735,6 +794,10 @@ svg {
 .panel {
   min-width: 0;
   overflow: hidden;
+}
+
+.panel.minimal-guidance {
+  overflow: visible;
 }
 
 .panel-head {
@@ -1182,9 +1245,20 @@ svg {
 }
 
 @media (max-width: 980px) {
-  .guidance-grid,
-  .guidance-body {
+  .guidance-main,
+  .guidance-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .guidance-footer {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .guidance-detail-grid {
+    position: static;
+    width: 100%;
+    margin-top: 10px;
   }
 }
 

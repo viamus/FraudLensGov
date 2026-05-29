@@ -127,9 +127,9 @@ def test_django_dashboard_guides_non_expert_reader(tmp_path: Path):
     html = response.content.decode("utf-8")
     assert "Os itens est\u00e3o compar\u00e1veis o bastante?" in html
     assert "Dicion\u00e1rio r\u00e1pido" in html
-    assert "Como ler os dados" in html
+    assert "Contexto e termos" in html
     assert "Grupo de itens parecidos o suficiente" in html
-    assert "Cada linha \u00e9 uma categoria candidata" in html
+    assert "Categorias padronizam nomes" in html
 
 
 def test_django_table_page_overflow_uses_last_available_page(tmp_path: Path):

@@ -10,8 +10,7 @@
     <a class="button secondary" href="{{ cluster_table.export_url }}"><svg><use href="#i-download"></use></svg><span>CSV</span></a>
   </div>
   <p class="panel-context">
-    Cada linha é um grupo de itens comparáveis. A leitura correta depende de descrição, unidade, faixa de preço,
-    UFs envolvidas e quantidade de itens no grupo.
+    Grupos comparáveis por descrição, unidade, faixa de preço e UFs envolvidas.
   </p>
   <form class="table-controls" method="get" action="{{ current_path }}">
     <input type="hidden" name="clusters_sort" value="{{ cluster_table.sort.key }}">
