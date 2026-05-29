@@ -7,11 +7,11 @@
         <h2>Bronze / Silver / Golden</h2>
       </div>
     </div>
-    <a href="/api/pipeline">API</a>
+    <a class="button secondary" href="/api/pipeline">API</a>
   </div>
-  <div class="layer-strip">
+  <div class="summary-strip">
     {% for layer in layers %}
-      <div class="layer-box">
+      <div>
         <span>{{ layer.name }}</span>
         <strong>{{ layer.value }}</strong>
         <small>{{ layer.meta }}</small>

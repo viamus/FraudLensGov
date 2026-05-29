@@ -8,17 +8,24 @@
       </div>
     </div>
   </div>
-  <div class="run-list">
-    {% for run in ingestion_runs %}
-      <div class="run-row">
-        <div>
-          <strong>{{ run.source }}</strong>
-          <span>{{ run.records_written }} gravados de {{ run.records_read }}</span>
-        </div>
-        <span class="status-dot {{ run.status_tone }}">{{ run.status }}</span>
+  <div class="table-scroll">
+    <div class="data-table runs-table" role="table" aria-label="Execuções recentes">
+      <div class="table-row table-head-row" role="row">
+        <span>Fonte</span>
+        <span>Status</span>
+        <span>Lidos</span>
+        <span>Gravados</span>
       </div>
-    {% empty %}
-      <div class="empty-state">Sem ingestões registradas.</div>
-    {% endfor %}
+      {% for run in ingestion_runs %}
+        <div class="table-row" role="row">
+          <strong>{{ run.source }}</strong>
+          <span class="badge {{ run.status_tone }}">{{ run.status }}</span>
+          <span>{{ run.records_read }}</span>
+          <span>{{ run.records_written }}</span>
+        </div>
+      {% empty %}
+        <div class="empty-state">Sem ingestões registradas.</div>
+      {% endfor %}
+    </div>
   </div>
 </article>

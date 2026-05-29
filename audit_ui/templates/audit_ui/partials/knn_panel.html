@@ -7,20 +7,28 @@
         <h2>Pares para revisão</h2>
       </div>
     </div>
-    <a href="/api/knn-review">API</a>
+    <a class="button secondary" href="/api/knn-review">API</a>
   </div>
-  <div class="knn-pair-list">
-    {% for pair in visible_knn_pairs %}
-      <article class="knn-pair">
-        <div class="pair-head">
-          <strong>{{ pair.ratio_display }}</strong>
-          <span>sim {{ pair.similarity_display }}</span>
+  <div class="table-scroll">
+    <div class="data-table knn-table" role="table" aria-label="Pares KNN para revisão">
+      <div class="table-row table-head-row" role="row">
+        <span>Item</span>
+        <span>Vizinho</span>
+        <span>Unidades</span>
+        <span>Preço normalizado</span>
+        <span>Diferença</span>
+      </div>
+      {% for pair in visible_knn_pairs %}
+        <div class="table-row" role="row">
+          <strong>{{ pair.item_description }}</strong>
+          <span>{{ pair.neighbor_description }}</span>
+          <span>{{ pair.unit }} / {{ pair.neighbor_unit }}</span>
+          <span>{{ pair.adjusted_unit_price_display }} / {{ pair.neighbor_adjusted_unit_price_display }}</span>
+          <span class="badge warning">{{ pair.ratio_display }}</span>
         </div>
-        <b>{{ pair.item_description }}</b>
-        <small>{{ pair.state }} | {{ pair.unit }} vs {{ pair.neighbor_unit }} | normalizado {{ pair.adjusted_unit_price_display }} vs {{ pair.neighbor_adjusted_unit_price_display }}</small>
-      </article>
-    {% empty %}
-      <div class="empty-state">Sem pares KNN materializados.</div>
-    {% endfor %}
+      {% empty %}
+        <div class="empty-state">Sem pares KNN materializados.</div>
+      {% endfor %}
+    </div>
   </div>
 </article>

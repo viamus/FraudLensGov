@@ -17,6 +17,7 @@ The current prototype uses a small, pinned Python stack:
 - Unit-aware Golden comparability rules: mass/volume normalization, broad-scope blocking, and specification-required item families.
 - Optional OpenAI Responses API explanations.
 - Django 5.2 LTS dashboard with a dark operational audit UI.
+- Corporate audit shell with collapsible navigation, table-first investigation views, and alert detail pages.
 - Legacy standard-library dashboard still available with `--legacy-webapp`.
 
 ## Run Locally
@@ -103,7 +104,7 @@ GET /api/alerts/{alert_id}
 GET /api/items/{item_id}/neighbors
 ```
 
-Cluster and alert links are available directly in the dashboard.
+Cluster, alert, and comparison links are available directly in the dashboard. Alert detail pages under `/investigacao/alertas/{alert_id}` show the investigated item, normalized price, median of comparable neighbors, comparison rows, and a deterministic audit narrative.
 
 Google Programmable Search for local portal discovery:
 

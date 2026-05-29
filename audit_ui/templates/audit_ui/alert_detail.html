@@ -1,0 +1,176 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FraudLensGov - Alerta</title>
+  <link rel="stylesheet" href="{% static 'audit_ui/app.css' %}">
+  <script src="{% static 'audit_ui/app.js' %}" defer></script>
+</head>
+<body>
+  <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="i-dashboard" viewBox="0 0 24 24"><path d="M4 13h7V4H4v9Zm9 7h7V4h-7v16ZM4 20h7v-5H4v5Z"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-7 9 7 4 7-4m-14 4 7 4 7-4"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.4 2.8 8.3 7 10 4.2-1.7 7-5.6 7-10V6l-7-3Z"/></symbol>
+    <symbol id="i-network" viewBox="0 0 24 24"><path d="M7 7a3 3 0 1 0 0 .1M17 7a3 3 0 1 0 0 .1M12 17a3 3 0 1 0 0 .1M9.5 8.5l5 0M8.5 9.5l2.5 5M15.5 9.5l-2.5 5"/></symbol>
+    <symbol id="i-tags" viewBox="0 0 24 24"><path d="M4 5v6l8 8 7-7-8-7H4Zm4 4h.01M14 5l6 6"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24"><path d="M5 6c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3Zm0 0v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19L12 3Zm0 6v5m0 3h.01"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  </svg>
+
+  <div class="app-frame" data-shell>
+    <aside class="sidebar" aria-label="Menu principal">
+      <div class="brand">
+        <div class="brand-mark">FG</div>
+        <div class="brand-copy">
+          <strong>FraudLensGov</strong>
+          <span>Audit console</span>
+        </div>
+      </div>
+      <nav class="main-menu">
+        {% for item in nav_items %}
+          <a href="{{ item.href }}" class="menu-item{% if item.active %} active{% endif %}" title="{{ item.label }}">
+            <svg><use href="#{{ item.icon }}"></use></svg>
+            <span>{{ item.label }}</span>
+          </a>
+        {% endfor %}
+      </nav>
+      <div class="sidebar-foot">
+        <span>Base ativa</span>
+        <strong>SQLite local</strong>
+      </div>
+    </aside>
+
+    <div class="page">
+      <header class="commandbar">
+        <button class="icon-button" type="button" data-sidebar-toggle aria-label="Alternar menu" aria-expanded="true">
+          <svg><use href="#i-menu"></use></svg>
+        </button>
+        <div class="page-heading">
+          <p class="eyebrow">Investigação</p>
+          <h1>{{ alert.display_title }}</h1>
+          <p>{{ alert.risk_label }} · {{ alert.ratio_display }} acima da mediana comparável</p>
+        </div>
+        <div class="command-actions">
+          <a class="button secondary" href="/investigacao">Voltar</a>
+          <a class="button secondary" href="/api/alerts/{{ alert.alert_id }}">JSON</a>
+          {% if alert.portal_url %}
+            <a class="button primary" href="{{ alert.portal_url }}">PNCP</a>
+          {% endif %}
+        </div>
+      </header>
+
+      <main class="content detail-content">
+        <section class="section">
+          <div class="detail-hero">
+            <div>
+              <span class="badge critical">Severidade {{ alert.severity }}</span>
+              <h2>{{ alert.title }}</h2>
+              <p>{{ alert.explanation }}</p>
+            </div>
+            <div class="hero-metrics">
+              <div><span>Preço normalizado</span><strong>{{ alert.adjusted_unit_price_display }}</strong></div>
+              <div><span>Mediana vizinhos</span><strong>{{ alert.neighbor_median_display }}</strong></div>
+              <div><span>Comparáveis</span><strong>{{ alert.comparison_count }}</strong></div>
+              <div><span>Score</span><strong>{{ alert.score_display }}</strong></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section two-column detail-grid">
+          <article class="panel">
+            <div class="panel-head">
+              <div class="head-title">
+                <svg><use href="#i-alert"></use></svg>
+                <div>
+                  <p class="eyebrow">Evidência</p>
+                  <h2>Item investigado</h2>
+                </div>
+              </div>
+            </div>
+            <div class="facts-grid">
+              <div><span>Órgão</span><strong>{{ alert.agency_name }}</strong></div>
+              <div><span>Fornecedor</span><strong>{{ alert.supplier_name }}</strong></div>
+              <div><span>UF / data</span><strong>{{ alert.state }} · {{ alert.procurement_date }}</strong></div>
+              <div><span>Unidade</span><strong>{{ alert.unit }}</strong></div>
+              <div><span>Preço bruto</span><strong>{{ alert.unit_price_display }}</strong></div>
+              <div><span>Valor total</span><strong>{{ alert.total_value_display }}</strong></div>
+              <div><span>Qualidade</span><strong>{{ alert.quality_level }}</strong></div>
+              <div><span>Processo</span><strong>{{ alert.procurement_id }}</strong></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div class="head-title">
+                <svg><use href="#i-link"></use></svg>
+                <div>
+                  <p class="eyebrow">Relatório</p>
+                  <h2>Leitura auditável</h2>
+                </div>
+              </div>
+            </div>
+            <div class="report-list">
+              {% for line in report_lines %}
+                <div class="report-line">
+                  <span>{{ line.label }}</span>
+                  <p>{{ line.text }}</p>
+                </div>
+              {% endfor %}
+            </div>
+          </article>
+        </section>
+
+        <section class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div class="head-title">
+                <svg><use href="#i-network"></use></svg>
+                <div>
+                  <p class="eyebrow">Comparação</p>
+                  <h2>Vizinhos usados no cálculo</h2>
+                </div>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <div class="data-table comparison-table" role="table" aria-label="Vizinhos comparáveis">
+                <div class="table-row table-head-row" role="row">
+                  <span>Vizinho</span>
+                  <span>UF</span>
+                  <span>Unidade</span>
+                  <span>Preço bruto</span>
+                  <span>Normalizado</span>
+                  <span>Similaridade</span>
+                  <span>Diferença</span>
+                </div>
+                {% for row in comparison_rows %}
+                  <div class="table-row" role="row">
+                    <strong>{{ row.description }}</strong>
+                    <span>{{ row.state_display }}</span>
+                    <span>{{ row.unit }}</span>
+                    <span>{{ row.unit_price_display }}</span>
+                    <span>{{ row.adjusted_unit_price_display }}</span>
+                    <span>{{ row.similarity_display }}</span>
+                    <span class="badge warning">{{ row.ratio_display }}</span>
+                  </div>
+                {% empty %}
+                  <div class="empty-state">Sem vizinhos registrados para este alerta.</div>
+                {% endfor %}
+              </div>
+            </div>
+          </article>
+        </section>
+      </main>
+
+      <footer class="app-footer">
+        <span>FraudLensGov</span>
+        <span>Alerta {{ alert.alert_id }}</span>
+        <span>Relatório determinístico, sem acusação automática</span>
+      </footer>
+    </div>
+  </div>
+</body>
+</html>

@@ -101,6 +101,7 @@ Componentes:
 - `rag`: recuperacao de trechos de edital, termo de referencia e historico de precos.
 - `genai`: explicacao de alertas via API de modelo configuravel.
 - `audit_ui`: dashboard local em Django, APIs JSON operacionais e fila de revisao KNN.
+- `audit_ui`: shell corporativo local, menu recolhivel, tabelas operacionais, paginas de detalhe de alerta e relatorio deterministico.
 
 O prototipo ja inclui um modulo RAG local sem dependencias externas para chunking e recuperacao lexical. Ele serve como contrato de arquitetura antes da troca por embeddings.
 
@@ -305,6 +306,7 @@ Ao adicionar novas dependencias:
 - Frontend dedicado em React ou HTMX.
 - Filtros por estado, orgao, fornecedor, modalidade e severidade.
 - Pagina de detalhe do alerta.
+- Comparacao visual dos vizinhos usados no outlier, com preco bruto, preco normalizado, mediana e razao.
 - Relatorio auditavel em Markdown/PDF.
 
 ### Fase 5 - Operacao

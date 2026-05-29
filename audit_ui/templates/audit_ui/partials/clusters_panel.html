@@ -8,15 +8,28 @@
       </div>
     </div>
   </div>
-  <div class="cluster-list">
-    {% for cluster in clusters %}
-      <a class="cluster-row" href="/api/clusters/{{ cluster.id }}">
-        <strong>{{ cluster.label }}</strong>
-        <span>{{ cluster.item_count }} itens | média {{ cluster.avg_unit_price_display }}</span>
-        <small>{{ cluster.min_unit_price_display }} a {{ cluster.max_unit_price_display }} | {{ cluster.states_display }}</small>
-      </a>
-    {% empty %}
-      <div class="empty-state">Sem clusters comparáveis.</div>
-    {% endfor %}
+  <div class="table-scroll">
+    <div class="data-table clusters-table" role="table" aria-label="Clusters comparáveis">
+      <div class="table-row table-head-row" role="row">
+        <span>Cluster</span>
+        <span>Itens</span>
+        <span>Média</span>
+        <span>Faixa</span>
+        <span>UFs</span>
+        <span>Ação</span>
+      </div>
+      {% for cluster in clusters %}
+        <div class="table-row" role="row">
+          <strong>{{ cluster.label }}</strong>
+          <span>{{ cluster.item_count }}</span>
+          <span>{{ cluster.avg_unit_price_display }}</span>
+          <span>{{ cluster.min_unit_price_display }} a {{ cluster.max_unit_price_display }}</span>
+          <span>{{ cluster.states_display }}</span>
+          <a class="button ghost" href="/api/clusters/{{ cluster.id }}">API</a>
+        </div>
+      {% empty %}
+        <div class="empty-state">Sem clusters comparáveis.</div>
+      {% endfor %}
+    </div>
   </div>
 </article>

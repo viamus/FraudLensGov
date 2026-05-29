@@ -9,6 +9,7 @@ urlpatterns = [
     path("", views.dashboard, name="dashboard"),
     path("pipeline", views.pipeline_page, name="pipeline"),
     path("investigacao", views.investigation_page, name="investigation"),
+    path("investigacao/alertas/<str:alert_id>", views.alert_detail_page, name="alert-detail"),
     path("normalizacao", views.normalization_page, name="normalization"),
     path("operacao", views.operation_page, name="operation"),
     path("api/summary", views.summary_api, name="summary-api"),

@@ -8,19 +8,29 @@
       </div>
     </div>
   </div>
-  <div class="job-stack">
-    {% for job in visible_jobs %}
-      <div class="job-row">
-        <div>
-          <strong>{{ job.name }}</strong>
-          <span>{{ job.layer }} | {{ job.current_step }}</span>
-        </div>
-        <span class="status-dot {{ job.status_tone }}">{{ job.status }}</span>
-        <div class="progress"><div style="{{ job.progress_style }}"></div></div>
-        <small>{{ job.progress_display }} | {{ job.message }}</small>
+  <div class="table-scroll">
+    <div class="data-table jobs-table" role="table" aria-label="Jobs de processamento">
+      <div class="table-row table-head-row" role="row">
+        <span>Job</span>
+        <span>Camada</span>
+        <span>Status</span>
+        <span>Progresso</span>
+        <span>Mensagem</span>
       </div>
-    {% empty %}
-      <div class="empty-state">Sem jobs registrados.</div>
-    {% endfor %}
+      {% for job in visible_jobs %}
+        <div class="table-row" role="row">
+          <strong>{{ job.name }}</strong>
+          <span>{{ job.layer }} / {{ job.current_step }}</span>
+          <span class="badge {{ job.status_tone }}">{{ job.status }}</span>
+          <div class="progress-cell">
+            <div class="progress"><div style="{{ job.progress_style }}"></div></div>
+            <small>{{ job.progress_display }}</small>
+          </div>
+          <span>{{ job.message }}</span>
+        </div>
+      {% empty %}
+        <div class="empty-state">Sem jobs registrados.</div>
+      {% endfor %}
+    </div>
   </div>
 </article>

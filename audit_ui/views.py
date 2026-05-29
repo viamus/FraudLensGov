@@ -8,6 +8,7 @@ from django.http import Http404, JsonResponse
 from django.shortcuts import render
 
 from fraud_lens_gov.storage import Storage
+from fraud_lens_gov.unit_normalization import adjusted_price_for_unit
 
 
 def dashboard(request):
@@ -20,6 +21,15 @@ def pipeline_page(request):
 
 def investigation_page(request):
     return _render_dashboard(request, "investigacao")
+
+
+def alert_detail_page(request, alert_id: str):
+    storage = _storage()
+    detail = storage.alert_detail(alert_id)
+    if detail is None:
+        raise Http404("Alert not found")
+    summary = storage.dashboard_summary()
+    return render(request, "audit_ui/alert_detail.html", _alert_detail_context(summary, detail))
 
 
 def normalization_page(request):
@@ -170,6 +180,40 @@ def _dashboard_context(summary: dict[str, Any], active_page: str = "overview") -
     }
 
 
+def _alert_detail_context(summary: dict[str, Any], detail: dict[str, Any]) -> dict[str, Any]:
+    alerts = _dict(summary.get("alerts"))
+    evidence = _dict(detail.get("evidence"))
+    quality = _dict(detail.get("description_quality"))
+    adjusted = _float(evidence.get("adjusted_unit_price"))
+    median = _float(evidence.get("neighbor_median"))
+    ratio = _float(evidence.get("ratio"))
+    comparison_rows = _comparison_rows(evidence, adjusted)
+    return {
+        "active_page": "investigacao",
+        "page_title": "Detalhe do alerta",
+        "page_subtitle": "Comparação de preço, vizinhos usados e narrativa auditável.",
+        "nav_items": _nav_items("investigacao"),
+        "posture": _risk_posture(alerts),
+        "alert": {
+            **detail,
+            "display_title": _display_item(detail.get("item_description")),
+            "risk_label": _risk_label(detail.get("risk_type")),
+            "score_display": f"{_float(detail.get('score')):.2f}",
+            "total_value_display": _money(detail.get("total_value")),
+            "unit_price_display": _money(detail.get("unit_price")),
+            "adjusted_unit_price_display": _money(adjusted),
+            "neighbor_median_display": _money(median),
+            "ratio_display": f"{ratio:.1f}x" if ratio else "N/A",
+            "quality_level": quality.get("level", "unknown"),
+            "quality_reason": quality.get("reason", ""),
+            "comparison_count": _int(evidence.get("comparison_count")),
+        },
+        "comparison_rows": comparison_rows,
+        "report_lines": _report_lines(detail, evidence, comparison_rows),
+        "db_path": str(settings.FRAUDLENS_DB),
+    }
+
+
 def _page_copy(active_page: str) -> dict[str, str]:
     pages = {
         "overview": {
@@ -290,6 +334,7 @@ def _alert_view(row: dict[str, Any]) -> dict[str, Any]:
         **row,
         "display_title": _display_item(row.get("item_description")),
         "risk_label": _risk_label(risk_type),
+        "detail_href": f"/investigacao/alertas/{row.get('id')}",
         "score_display": f"{_float(row.get('score')):.2f}",
         "total_value_display": _money(row.get("total_value")),
         "quality_level": quality.get("level", "unknown"),
@@ -299,6 +344,54 @@ def _alert_view(row: dict[str, Any]) -> dict[str, Any]:
 def _risk_type_view(row: dict[str, Any]) -> dict[str, Any]:
     label = _risk_label(row.get("risk_type"))
     return {**row, "label": label}
+
+
+def _comparison_rows(evidence: dict[str, Any], adjusted_unit_price: float) -> list[dict[str, Any]]:
+    rows = []
+    for neighbor in _as_list(evidence.get("neighbors")):
+        adjusted_neighbor = adjusted_price_for_unit(str(neighbor.get("unit") or ""), _float(neighbor.get("unit_price")))
+        ratio = adjusted_unit_price / adjusted_neighbor if adjusted_unit_price and adjusted_neighbor else 0.0
+        rows.append(
+            {
+                **neighbor,
+                "unit_price_display": _money(neighbor.get("unit_price")),
+                "adjusted_unit_price": adjusted_neighbor,
+                "adjusted_unit_price_display": _money(adjusted_neighbor),
+                "similarity_display": f"{_float(neighbor.get('similarity')):.2f}",
+                "ratio_display": f"{ratio:.1f}x" if ratio else "N/A",
+                "state_display": str(neighbor.get("state") or "UF N/A"),
+            }
+        )
+    return rows
+
+
+def _report_lines(
+    detail: dict[str, Any],
+    evidence: dict[str, Any],
+    comparison_rows: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    ratio = _float(evidence.get("ratio"))
+    adjusted = _money(evidence.get("adjusted_unit_price"))
+    median = _money(evidence.get("neighbor_median"))
+    item = _display_item(detail.get("item_description"))
+    return [
+        {
+            "label": "Fato observado",
+            "text": f"{item} foi registrado com preço normalizado de {adjusted}.",
+        },
+        {
+            "label": "Comparação",
+            "text": f"A mediana dos {len(comparison_rows)} vizinhos comparáveis ficou em {median}.",
+        },
+        {
+            "label": "Sinal estatístico",
+            "text": f"O item ficou {ratio:.1f}x acima da mediana usada pelo motor de anomalias.",
+        },
+        {
+            "label": "Cuidado de auditoria",
+            "text": "O alerta prioriza revisão humana; edital, termo de referência e especificações ainda precisam confirmar equivalência real.",
+        },
+    ]
 
 
 def _quality_rows(golden: dict[str, Any], scope_total: int) -> list[dict[str, Any]]:

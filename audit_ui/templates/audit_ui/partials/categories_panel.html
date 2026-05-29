@@ -8,22 +8,29 @@
       </div>
     </div>
   </div>
-  <div class="category-summary">
-    <div class="data-row"><span>Categorizados</span><strong>{{ category_totals.categorized }}</strong></div>
-    <div class="data-row"><span>Confiantes</span><strong>{{ category_totals.confident }}</strong></div>
-    <div class="data-row"><span>Pedem RAG</span><strong>{{ category_totals.needs_rag }}</strong></div>
+  <div class="summary-strip">
+    <div><span>Categorizados</span><strong>{{ category_totals.categorized }}</strong></div>
+    <div><span>Confiantes</span><strong>{{ category_totals.confident }}</strong></div>
+    <div><span>Pedem RAG</span><strong>{{ category_totals.needs_rag }}</strong></div>
   </div>
-  <div class="category-list">
-    {% for category in categories %}
-      <div class="category-row">
-        <div>
-          <strong>{{ category.category }}</strong>
-          <span>{{ category.item_count }} itens | {{ category.confidence_display }} confiança</span>
-        </div>
-        <small>{{ category.needs_rag }} pedem RAG</small>
+  <div class="table-scroll">
+    <div class="data-table categories-table" role="table" aria-label="Categorias candidatas">
+      <div class="table-row table-head-row" role="row">
+        <span>Categoria</span>
+        <span>Itens</span>
+        <span>Confiança</span>
+        <span>RAG</span>
       </div>
-    {% empty %}
-      <div class="empty-state">Sem categorias materializadas.</div>
-    {% endfor %}
+      {% for category in categories %}
+        <div class="table-row" role="row">
+          <strong>{{ category.category }}</strong>
+          <span>{{ category.item_count }}</span>
+          <span>{{ category.confidence_display }}</span>
+          <span class="badge neutral">{{ category.needs_rag }}</span>
+        </div>
+      {% empty %}
+        <div class="empty-state">Sem categorias materializadas.</div>
+      {% endfor %}
+    </div>
   </div>
 </article>

@@ -4,19 +4,24 @@
       <svg><use href="#i-database"></use></svg>
       <div>
         <p class="eyebrow">Qualidade</p>
-        <h2>Pronto para análise</h2>
+        <h2>Bloqueios Golden</h2>
       </div>
     </div>
   </div>
-  <div class="row-list">
-    {% for item in quality %}
-      <div class="data-row {{ item.tone }}">
-        <span>
-          {{ item.label }}
-          <small>{{ item.detail }}</small>
-        </span>
-        <strong>{{ item.value }}</strong>
+  <div class="table-scroll">
+    <div class="data-table quality-table" role="table" aria-label="Qualidade da base">
+      <div class="table-row table-head-row" role="row">
+        <span>Grupo</span>
+        <span>Motivo</span>
+        <span>Registros</span>
       </div>
-    {% endfor %}
+      {% for item in quality %}
+        <div class="table-row {{ item.tone }}" role="row">
+          <strong>{{ item.label }}</strong>
+          <span>{{ item.detail }}</span>
+          <strong class="numeric">{{ item.value }}</strong>
+        </div>
+      {% endfor %}
+    </div>
   </div>
 </article>
