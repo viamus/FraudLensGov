@@ -9,6 +9,10 @@
     </div>
     <a class="button secondary" href="{{ run_table.export_url }}"><svg><use href="#i-download"></use></svg><span>CSV</span></a>
   </div>
+  <p class="panel-context">
+    Cada linha é uma tentativa de ingestão da fonte pública. Lidos, gravados e status ajudam a separar ausência
+    de dados, falha de parsing e execução parcial.
+  </p>
   <form class="table-controls" method="get" action="{{ current_path }}">
     <input type="hidden" name="runs_sort" value="{{ run_table.sort.key }}">
     <input type="hidden" name="runs_dir" value="{{ run_table.sort.direction }}">

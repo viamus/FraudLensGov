@@ -116,6 +116,22 @@ def test_django_tables_render_filters_and_pagination(tmp_path: Path):
     assert 'name="runs_q"' in operation_html
 
 
+def test_django_dashboard_guides_non_expert_reader(tmp_path: Path):
+    db_path = tmp_path / "fraudlens.sqlite"
+    _seed_dashboard_db(db_path)
+
+    with override_settings(FRAUDLENS_DB=str(db_path)):
+        response = Client().get("/normalizacao", {"clusters_page": "2", "categories_page": "2"})
+
+    assert response.status_code == 200
+    html = response.content.decode("utf-8")
+    assert "Os itens est\u00e3o compar\u00e1veis o bastante?" in html
+    assert "Dicion\u00e1rio r\u00e1pido" in html
+    assert "Como ler os dados" in html
+    assert "Grupo de itens parecidos o suficiente" in html
+    assert "Cada linha \u00e9 uma categoria candidata" in html
+
+
 def test_django_table_page_overflow_uses_last_available_page(tmp_path: Path):
     db_path = tmp_path / "fraudlens.sqlite"
     _seed_dashboard_db(db_path)

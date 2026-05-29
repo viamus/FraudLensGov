@@ -9,6 +9,10 @@
     </div>
     <a class="button secondary" href="{{ job_table.export_url }}"><svg><use href="#i-download"></use></svg><span>CSV</span></a>
   </div>
+  <p class="panel-context">
+    Cada linha é uma etapa assíncrona do processamento. Status, progresso e mensagem mostram onde a fila está
+    sem exigir recálculo completo da base.
+  </p>
   <form class="table-controls" method="get" action="{{ current_path }}">
     <input type="hidden" name="jobs_sort" value="{{ job_table.sort.key }}">
     <input type="hidden" name="jobs_dir" value="{{ job_table.sort.direction }}">

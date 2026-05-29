@@ -9,6 +9,10 @@
     </div>
     <a class="button secondary" href="{{ category_table.export_url }}"><svg><use href="#i-download"></use></svg><span>CSV</span></a>
   </div>
+  <p class="panel-context">
+    Cada linha é uma categoria candidata para padronizar nomes de itens. Confiança baixa ou pedido de RAG indica
+    que documentos e metadados ainda são necessários antes de comparar preço.
+  </p>
   <div class="summary-strip">
     <div><span>Categorizados</span><strong>{{ category_totals.categorized }}</strong></div>
     <div><span>Confiantes</span><strong>{{ category_totals.confident }}</strong></div>

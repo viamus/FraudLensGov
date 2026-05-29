@@ -238,10 +238,23 @@ def _dashboard_context(
     scope_total = _int(golden.get("procurement_scope"))
 
     page_copy = _page_copy(active_page)
+    guidance = _page_guidance(
+        active_page,
+        alerts=_int(alerts.get("alerts")),
+        pairs=_int(knn_table["page"]["total"]),
+        categories=_int(category_table["page"]["total"]),
+        clusters=_int(cluster_table["page"]["total"]),
+        jobs=_int(job_table["page"]["total"]),
+        runs=_int(run_table["page"]["total"]),
+        comparable=comparable,
+        blocked=blocked_total + scope_total,
+        silver_total=_int(silver.get("total")),
+    )
     return {
         "active_page": active_page,
         "page_title": page_copy["title"],
         "page_subtitle": page_copy["subtitle"],
+        "guidance": guidance,
         "current_path": _page_path(active_page),
         "nav_items": _nav_items(active_page),
         "posture": _risk_posture(alerts),
@@ -560,6 +573,153 @@ def _page_copy(active_page: str) -> dict[str, str]:
         "operacao": {
             "title": "Opera\u00e7\u00e3o",
             "subtitle": "Jobs, ingest\u00f5es recentes e sa\u00fade do processamento local.",
+        },
+    }
+    return pages.get(active_page, pages["overview"])
+
+
+def _page_guidance(
+    active_page: str,
+    *,
+    alerts: int,
+    pairs: int,
+    categories: int,
+    clusters: int,
+    jobs: int,
+    runs: int,
+    comparable: int,
+    blocked: int,
+    silver_total: int,
+) -> dict[str, Any]:
+    disclaimer = (
+        "Esses sinais priorizam triagem e auditoria. Eles n\u00e3o afirmam fraude sozinhos; "
+        "o caso precisa de documento, contexto do edital e revis\u00e3o humana."
+    )
+    pages = {
+        "overview": {
+            "label": "Leitura executiva",
+            "question": "Qual \u00e9 a situa\u00e7\u00e3o geral da base?",
+            "plain": (
+                "Esta p\u00e1gina resume o volume processado, a parcela compar\u00e1vel e os sinais "
+                "estat\u00edsticos que merecem aten\u00e7\u00e3o primeiro."
+            ),
+            "facts": [
+                {"label": "Registros Silver", "value": silver_total},
+                {"label": "Itens compar\u00e1veis", "value": comparable},
+                {"label": "Alertas ativos", "value": alerts},
+            ],
+            "read": [
+                "Compar\u00e1veis s\u00e3o itens com descri\u00e7\u00e3o e unidade suficientes para benchmark.",
+                "Fora do KNN indica registros ainda fracos para compara\u00e7\u00e3o estat\u00edstica confi\u00e1vel.",
+                "Alertas combinam pre\u00e7o, recorr\u00eancia, qualidade da descri\u00e7\u00e3o e vizinhos encontrados.",
+            ],
+            "terms": [
+                {"term": "Silver", "definition": "Registro p\u00fablico j\u00e1 normalizado para consulta."},
+                {"term": "Golden", "definition": "Registro pronto, ou bloqueado, para compara\u00e7\u00e3o anal\u00edtica."},
+                {"term": "KNN", "definition": "Vizinhos mais parecidos usados como base de compara\u00e7\u00e3o."},
+                {"term": "Alerta", "definition": "Sinal estat\u00edstico que merece revis\u00e3o documentada."},
+            ],
+            "limit": disclaimer,
+        },
+        "pipeline": {
+            "label": "Trilha do dado",
+            "question": "De onde o dado veio e em que camada est\u00e1?",
+            "plain": (
+                "Aqui a plataforma mostra a passagem do dado bruto para um dado audit\u00e1vel: "
+                "coleta, normaliza\u00e7\u00e3o e prepara\u00e7\u00e3o para compara\u00e7\u00e3o."
+            ),
+            "facts": [
+                {"label": "Silver", "value": silver_total},
+                {"label": "Golden compar\u00e1vel", "value": comparable},
+                {"label": "Bloqueios", "value": blocked},
+            ],
+            "read": [
+                "Bronze preserva o dado coletado da fonte p\u00fablica.",
+                "Silver padroniza campos como item, unidade, \u00f3rg\u00e3o, fornecedor, data e valor.",
+                "Golden decide se o item pode entrar no benchmark ou se precisa de complemento.",
+            ],
+            "terms": [
+                {"term": "Bronze", "definition": "Carga bruta, sem enriquecimento complementar."},
+                {"term": "Silver", "definition": "Tabela normalizada para leitura e filtros."},
+                {"term": "Golden", "definition": "Base preparada para risco, KNN e relat\u00f3rio audit\u00e1vel."},
+                {"term": "Job", "definition": "Etapa ass\u00edncrona com status, progresso e mensagem."},
+            ],
+            "limit": disclaimer,
+        },
+        "investigacao": {
+            "label": "Fila de revis\u00e3o",
+            "question": "Quais casos merecem revis\u00e3o humana primeiro?",
+            "plain": (
+                "Esta tela junta alertas estat\u00edsticos e pares KNN para explicar por que um pre\u00e7o, "
+                "fornecedor ou padr\u00e3o de compra ficou fora do esperado."
+            ),
+            "facts": [
+                {"label": "Alertas", "value": alerts},
+                {"label": "Pares KNN", "value": pairs},
+                {"label": "Bloqueados", "value": blocked},
+            ],
+            "read": [
+                "Severidade maior significa prioridade de leitura, n\u00e3o conclus\u00e3o autom\u00e1tica.",
+                "Diferen\u00e7a KNN compara itens parecidos, respeitando texto, unidade e pre\u00e7o normalizado.",
+                "A qualidade mostra se a descri\u00e7\u00e3o do item sustenta a compara\u00e7\u00e3o ou pede documento.",
+            ],
+            "terms": [
+                {"term": "Severidade", "definition": "Peso operacional para ordenar a revis\u00e3o."},
+                {"term": "Score", "definition": "For\u00e7a relativa do sinal estat\u00edstico."},
+                {"term": "Vizinho", "definition": "Item mais parecido usado no benchmark."},
+                {"term": "Mediana", "definition": "Pre\u00e7o central do grupo compar\u00e1vel."},
+            ],
+            "limit": disclaimer,
+        },
+        "normalizacao": {
+            "label": "Vocabul\u00e1rio do item",
+            "question": "Os itens est\u00e3o compar\u00e1veis o bastante?",
+            "plain": (
+                "Esta tela mostra como descri\u00e7\u00f5es p\u00fablicas foram agrupadas em categorias e "
+                "clusters. O objetivo \u00e9 separar item realmente compar\u00e1vel de descri\u00e7\u00e3o gen\u00e9rica."
+            ),
+            "facts": [
+                {"label": "Categorias", "value": categories},
+                {"label": "Clusters", "value": clusters},
+                {"label": "Pares KNN", "value": pairs},
+            ],
+            "read": [
+                "Categoria \u00e9 uma hip\u00f3tese de nome padronizado para descri\u00e7\u00f5es parecidas.",
+                "Cluster \u00e9 um grupo compar\u00e1vel; unidade e especifica\u00e7\u00e3o mudam o pre\u00e7o esperado.",
+                "RAG sinaliza item que deve buscar edital, termo de refer\u00eancia ou metadado antes do risco.",
+            ],
+            "terms": [
+                {"term": "Categoria", "definition": "Nome can\u00f4nico candidato para agrupar itens."},
+                {"term": "Cluster", "definition": "Grupo de itens parecidos o suficiente para compara\u00e7\u00e3o."},
+                {"term": "Unidade", "definition": "Medida de compra que altera totalmente o benchmark."},
+                {"term": "RAG", "definition": "Enriquecimento futuro com documentos e contexto textual."},
+            ],
+            "limit": disclaimer,
+        },
+        "operacao": {
+            "label": "Sa\u00fade operacional",
+            "question": "O processamento est\u00e1 saud\u00e1vel?",
+            "plain": (
+                "Aqui ficam as execu\u00e7\u00f5es de ingest\u00e3o e jobs ass\u00edncronos. A tela ajuda a entender "
+                "o que rodou, quanto gravou e onde a fila parou."
+            ),
+            "facts": [
+                {"label": "Jobs", "value": jobs},
+                {"label": "Ingest\u00f5es", "value": runs},
+                {"label": "Bloqueios", "value": blocked},
+            ],
+            "read": [
+                "Running indica processamento em andamento; partial pede leitura da mensagem.",
+                "Lidos e gravados ajudam a detectar fonte inst\u00e1vel, filtro vazio ou erro de parse.",
+                "Progresso mostra a etapa atual sem precisar recalcular tudo para enxergar a fila.",
+            ],
+            "terms": [
+                {"term": "Ingest\u00e3o", "definition": "Coleta de dados da fonte p\u00fablica para Bronze."},
+                {"term": "Job", "definition": "Processo rastre\u00e1vel de normaliza\u00e7\u00e3o ou an\u00e1lise."},
+                {"term": "Partial", "definition": "Rodou parcialmente e precisa de revis\u00e3o do motivo."},
+                {"term": "Gravados", "definition": "Registros aceitos no banco local depois da etapa."},
+            ],
+            "limit": disclaimer,
         },
     }
     return pages.get(active_page, pages["overview"])

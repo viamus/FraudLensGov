@@ -1,0 +1,47 @@
+<section class="section guidance-grid" aria-labelledby="guidance-title">
+  <article class="panel guidance-panel">
+    <div class="guidance-kicker">
+      <span>{{ guidance.label }}</span>
+      <span>Leitura orientada</span>
+    </div>
+    <div class="guidance-body">
+      <div>
+        <p class="eyebrow">O que estou vendo</p>
+        <h2 id="guidance-title">{{ guidance.question }}</h2>
+        <p>{{ guidance.plain }}</p>
+      </div>
+      <div class="guidance-facts" aria-label="Sinais desta tela">
+        {% for fact in guidance.facts %}
+          <div>
+            <span>{{ fact.label }}</span>
+            <strong>{{ fact.value }}</strong>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="guidance-reading">
+      <p class="eyebrow">Como ler os dados</p>
+      <ul>
+        {% for line in guidance.read %}
+          <li>{{ line }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    <p class="guidance-limit">{{ guidance.limit }}</p>
+  </article>
+
+  <aside class="panel glossary-panel" aria-label="Dicionário rápido">
+    <div class="glossary-head">
+      <p class="eyebrow">Dicionário rápido</p>
+      <h2>Termos da tela</h2>
+    </div>
+    <dl class="term-list">
+      {% for item in guidance.terms %}
+        <div>
+          <dt>{{ item.term }}</dt>
+          <dd>{{ item.definition }}</dd>
+        </div>
+      {% endfor %}
+    </dl>
+  </aside>
+</section>

@@ -12,6 +12,10 @@
       <a class="button secondary" href="/api/knn-review"><svg><use href="#i-code"></use></svg><span>API</span></a>
     </div>
   </div>
+  <p class="panel-context">
+    Cada linha compara um item com seu vizinho mais parecido. Diferença alta pede revisão porque unidade,
+    especificação ou escopo podem explicar variações legítimas.
+  </p>
   <form class="table-controls" method="get" action="{{ current_path }}">
     <input type="hidden" name="knn_sort" value="{{ knn_table.sort.key }}">
     <input type="hidden" name="knn_dir" value="{{ knn_table.sort.direction }}">

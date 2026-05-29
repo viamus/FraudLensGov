@@ -12,6 +12,10 @@
       <a class="button secondary" href="/api/summary"><svg><use href="#i-code"></use></svg><span>API</span></a>
     </div>
   </div>
+  <p class="panel-context">
+    Cada linha é um sinal de risco priorizado para revisão. O alerta mostra o motivo estatístico, o item afetado,
+    o valor envolvido, a força do sinal e a qualidade da descrição usada na comparação.
+  </p>
   <form class="table-controls" method="get" action="{{ current_path }}">
     <input type="hidden" name="alerts_sort" value="{{ alert_table.sort.key }}">
     <input type="hidden" name="alerts_dir" value="{{ alert_table.sort.direction }}">
