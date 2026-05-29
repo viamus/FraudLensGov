@@ -25,6 +25,8 @@ def test_storage_persists_ingestion_runs_and_clusters(tmp_path: Path):
     assert summary["ingestion_runs"][0]["status"] == "success"
     assert summary["cluster_totals"]["clusters"] > 0
     assert summary["cluster_totals"]["neighbor_edges"] > 0
+    assert summary["knn_review"]["pairs"]
+    assert "price_ratio" in summary["knn_review"]["pairs"][0]
     assert cluster_detail
     assert cluster_detail["members"]
     assert alert_detail
@@ -99,3 +101,25 @@ def test_golden_materialization_can_process_only_stale_items(tmp_path: Path):
 
     assert storage.count_stale_golden_items() == 1
     assert [item.id for item in stale] == [changed.id]
+
+
+def test_knn_blocked_items_surface_non_comparable_golden_rows(tmp_path: Path):
+    storage = Storage(tmp_path / "fraudlens.sqlite")
+    storage.init_schema()
+    blocked = replace(
+        SAMPLE_ITEMS[0],
+        id="blocked-generic-item",
+        source="compras_gov",
+        source_record_id="blocked-generic-item",
+        item_code="70",
+        item_description="PECA EQUIPAMENTO LABORATORIO",
+        source_payload={"numeroItemPncp": 70},
+    )
+
+    storage.upsert_items([blocked])
+    storage.replace_golden_items([blocked])
+    rows = storage.knn_blocked_items()
+
+    assert rows
+    assert rows[0]["item_id"] == "blocked-generic-item"
+    assert rows[0]["quality_level"] == "generic"

@@ -87,6 +87,7 @@ The dashboard also exposes JSON endpoints for audit workflows:
 ```text
 GET /api/summary
 GET /api/pipeline
+GET /api/knn-review
 GET /api/clusters/{cluster_id}
 GET /api/alerts/{alert_id}
 GET /api/items/{item_id}/neighbors

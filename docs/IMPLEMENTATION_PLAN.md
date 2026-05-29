@@ -270,6 +270,7 @@ Ao adicionar dependencias:
 - Criar tabela de execucoes de ingestao.
 - Criar Bronze/Silver/Golden com progresso por job.
 - Materializar clusters KNN lexicais de itens comparaveis.
+- Expor fila KNN separada da fila de alertas, com pares comparaveis e itens bloqueados por qualidade.
 - Persistir vizinhos KNN ranqueados por item para explicar agrupamentos.
 - Adicionar exportacao CSV/JSON/Markdown de alertas.
 - Criar testes de contrato para payloads de PNCP e Compras.gov.br.
@@ -358,6 +359,7 @@ Endpoints locais de investigacao:
 ```text
 GET /api/summary
 GET /api/pipeline
+GET /api/knn-review
 GET /api/clusters/{cluster_id}
 GET /api/alerts/{alert_id}
 GET /api/items/{item_id}/neighbors

@@ -41,6 +41,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 "pipeline_jobs": summary.get("pipeline_jobs", []),
             })
             return
+        if path == "/api/knn-review":
+            self._send_json({
+                "pairs": self.app_storage.knn_review_queue(limit=50),
+                "blocked": self.app_storage.knn_blocked_items(limit=50),
+            })
+            return
         if path.startswith("/api/clusters/"):
             cluster_id = unquote(path.removeprefix("/api/clusters/"))
             detail = self.app_storage.cluster_detail(cluster_id)
@@ -93,6 +99,7 @@ def render_dashboard(summary: dict[str, object]) -> str:
     ingestion_runs = summary.get("ingestion_runs", [])
     layers = summary.get("layers", {})
     pipeline_jobs = summary.get("pipeline_jobs", [])
+    knn_review = summary.get("knn_review", {})
     posture = _risk_posture(alerts)
     risk_rows = "".join(_render_risk_type(row) for row in risk_types)
     alert_rows = "".join(_render_alert_row(row) for row in top_alerts)
@@ -100,6 +107,8 @@ def render_dashboard(summary: dict[str, object]) -> str:
     run_rows = "".join(_render_ingestion_run(row) for row in ingestion_runs)
     layer_rows = _render_layers(layers)
     job_rows = "".join(_render_pipeline_job(row) for row in pipeline_jobs)
+    knn_rows = "".join(_render_knn_pair(row) for row in _as_list(knn_review, "pairs"))
+    blocked_rows = "".join(_render_knn_blocked(row) for row in _as_list(knn_review, "blocked"))
     return f"""<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -453,19 +462,72 @@ def render_dashboard(summary: dict[str, object]) -> str:
       color: var(--blue);
     }}
     .cluster-list,
-    .run-list {{
+    .run-list,
+    .knn-list,
+    .blocked-list {{
       padding: 12px;
       display: grid;
       gap: 10px;
     }}
     .cluster-item,
-    .run-item {{
+    .run-item,
+    .knn-item,
+    .blocked-item {{
       padding: 12px;
       border: 1px solid var(--line);
       background: #fff;
     }}
     .cluster-item {{
       border-left: 4px solid var(--blue);
+    }}
+    .knn-grid {{
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
+      gap: 12px;
+    }}
+    .knn-item {{
+      border-left: 4px solid var(--green);
+    }}
+    .blocked-item {{
+      border-left: 4px solid var(--orange);
+    }}
+    .knn-head {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }}
+    .knn-score {{
+      color: var(--blue);
+      font-weight: 900;
+      white-space: nowrap;
+    }}
+    .knn-pair {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 10px;
+    }}
+    .knn-side {{
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      padding: 10px;
+      min-width: 0;
+    }}
+    .knn-side strong,
+    .blocked-item strong {{
+      display: block;
+      color: var(--blue-dark);
+      font-size: 13px;
+      line-height: 1.35;
+    }}
+    .knn-side span,
+    .blocked-item span {{
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      margin-top: 5px;
     }}
     .run-item {{
       display: grid;
@@ -575,7 +637,9 @@ def render_dashboard(summary: dict[str, object]) -> str:
     @media (max-width: 980px) {{
       .command-grid,
       .content-grid,
-      .pipeline-grid {{
+      .pipeline-grid,
+      .knn-grid,
+      .knn-pair {{
         grid-template-columns: 1fr;
       }}
       .metrics {{
@@ -693,6 +757,21 @@ def render_dashboard(summary: dict[str, object]) -> str:
         </div>
       </section>
 
+      <section class="section-wide">
+        <div class="section-head">
+          <h2>Fila KNN</h2>
+          <span class="small-note">Vizinhos comparaveis + bloqueios</span>
+        </div>
+        <div class="knn-grid">
+          <div class="knn-list">
+            {knn_rows or '<div class="empty">Nenhum par KNN comparavel materializado. Execute build-clusters apos o Golden.</div>'}
+          </div>
+          <div class="blocked-list">
+            {blocked_rows or '<div class="empty">Nenhum item bloqueado por qualidade de descricao.</div>'}
+          </div>
+        </div>
+      </section>
+
       <section>
         <div class="section-head">
           <h2>Ultimas ingestoes</h2>
@@ -716,7 +795,7 @@ def render_dashboard(summary: dict[str, object]) -> str:
                 <th>Fornecedor</th><th>Valor</th><th>Data</th>
               </tr>
             </thead>
-            <tbody>{alert_rows or '<tr><td colspan="8" class="empty">Execute a analise para preencher a fila.</td></tr>'}</tbody>
+            <tbody>{alert_rows or '<tr><td colspan="8" class="empty">Sem alerta estatistico ativo. A revisao KNN fica na fila propria acima.</td></tr>'}</tbody>
           </table>
         </div>
       </section>
@@ -787,6 +866,40 @@ def _render_pipeline_job(row: dict[str, object]) -> str:
         </div>
         <div class="progress-track"><div class="progress-fill" style="width: {progress:.2f}%"></div></div>
         <span>{progress:.0f}% | {int(row.get("steps_done") or 0)} de {int(row.get("steps_total") or 0)} etapas | {escape(row.get("message"))}</span>
+      </div>"""
+
+
+def _render_knn_pair(row: dict[str, object]) -> str:
+    similarity = float(row.get("similarity") or 0)
+    ratio = float(row.get("price_ratio") or 0)
+    ratio_text = f"{ratio:.1f}x" if ratio >= 1.01 else "precos alinhados"
+    return f"""
+      <div class="knn-item">
+        <div class="knn-head">
+          <a class="cluster-title action-link" href="/api/items/{escape(row.get('item_id'))}/neighbors">Par comparavel</a>
+          <span class="knn-score">sim {similarity:.2f} | {escape(ratio_text)}</span>
+        </div>
+        <div class="knn-pair">
+          <div class="knn-side">
+            <strong>{escape(row.get("item_description"))}</strong>
+            <span>{escape(row.get("state"))} | {escape(row.get("unit"))} | {money(row.get("unit_price"))}</span>
+            <span>{escape(row.get("agency_name"))}</span>
+          </div>
+          <div class="knn-side">
+            <strong>{escape(row.get("neighbor_description"))}</strong>
+            <span>{escape(row.get("neighbor_state"))} | {escape(row.get("neighbor_unit"))} | {money(row.get("neighbor_unit_price"))}</span>
+            <span>{escape(row.get("neighbor_agency_name"))}</span>
+          </div>
+        </div>
+      </div>"""
+
+
+def _render_knn_blocked(row: dict[str, object]) -> str:
+    return f"""
+      <div class="blocked-item">
+        <strong>{escape(row.get("item_description"))}</strong>
+        <span>{escape(row.get("quality_level"))} | {escape(row.get("quality_reason"))}</span>
+        <span>{escape(row.get("state"))} | {money(row.get("total_value"))} | {escape(row.get("agency_name"))}</span>
       </div>"""
 
 
@@ -870,6 +983,15 @@ def _states(value: object) -> list[str]:
         if isinstance(parsed, list):
             return [str(item) for item in parsed]
     return []
+
+
+def _as_list(data: object, key: str) -> list[dict[str, object]]:
+    if not isinstance(data, dict):
+        return []
+    value = data.get(key)
+    if not isinstance(value, list):
+        return []
+    return [row for row in value if isinstance(row, dict)]
 
 
 def escape(value: object) -> str:

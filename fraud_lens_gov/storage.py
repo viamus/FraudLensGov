@@ -695,6 +695,97 @@ class Storage:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def knn_review_queue(self, limit: int = 25) -> list[dict[str, object]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                WITH pairs AS (
+                    SELECT
+                        CASE
+                            WHEN item_id < neighbor_item_id THEN item_id
+                            ELSE neighbor_item_id
+                        END AS left_id,
+                        CASE
+                            WHEN item_id < neighbor_item_id THEN neighbor_item_id
+                            ELSE item_id
+                        END AS right_id,
+                        MAX(similarity) AS similarity,
+                        MIN(rank) AS best_rank
+                    FROM item_neighbors
+                    GROUP BY left_id, right_id
+                )
+                SELECT
+                    p.similarity,
+                    p.best_rank,
+                    l.id AS item_id,
+                    l.item_description,
+                    l.unit,
+                    l.unit_price,
+                    l.total_value,
+                    l.agency_name,
+                    l.supplier_name,
+                    l.state,
+                    l.procurement_date,
+                    r.id AS neighbor_item_id,
+                    r.item_description AS neighbor_description,
+                    r.unit AS neighbor_unit,
+                    r.unit_price AS neighbor_unit_price,
+                    r.total_value AS neighbor_total_value,
+                    r.agency_name AS neighbor_agency_name,
+                    r.supplier_name AS neighbor_supplier_name,
+                    r.state AS neighbor_state,
+                    r.procurement_date AS neighbor_procurement_date,
+                    ABS(l.unit_price - r.unit_price) AS price_delta,
+                    CASE
+                        WHEN l.unit_price <= 0 OR r.unit_price <= 0 THEN 0
+                        WHEN l.unit_price >= r.unit_price THEN l.unit_price / r.unit_price
+                        ELSE r.unit_price / l.unit_price
+                    END AS price_ratio
+                FROM pairs p
+                JOIN procurement_items l ON l.id = p.left_id
+                JOIN procurement_items r ON r.id = p.right_id
+                ORDER BY p.similarity DESC, price_ratio DESC, price_delta DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def knn_blocked_items(self, limit: int = 20) -> list[dict[str, object]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    p.id AS item_id,
+                    p.item_description,
+                    p.item_code,
+                    p.unit,
+                    p.unit_price,
+                    p.total_value,
+                    p.agency_name,
+                    p.supplier_name,
+                    p.state,
+                    p.procurement_date,
+                    g.quality_level,
+                    g.quality_reason
+                FROM golden_items g
+                JOIN procurement_items p ON p.id = g.item_id
+                WHERE g.comparable = 0
+                  AND g.quality_level <> 'procurement_scope'
+                ORDER BY
+                    CASE g.quality_level
+                        WHEN 'missing' THEN 1
+                        WHEN 'generic' THEN 2
+                        WHEN 'weak' THEN 3
+                        ELSE 4
+                    END,
+                    p.total_value DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def alert_detail(self, alert_id: str) -> dict[str, object] | None:
         with self.connect() as conn:
             row = conn.execute(
@@ -890,6 +981,10 @@ class Storage:
                 "golden": self._none_to_zero(dict(golden)),
             },
             "pipeline_jobs": self.list_pipeline_jobs(limit=6),
+            "knn_review": {
+                "pairs": self.knn_review_queue(limit=12),
+                "blocked": self.knn_blocked_items(limit=10),
+            },
         }
 
     @staticmethod
