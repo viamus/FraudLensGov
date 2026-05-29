@@ -1,32 +1,13 @@
 from __future__ import annotations
 
-import re
 from collections import Counter, defaultdict
 
 from .models import ItemCluster, ItemClusterMember, ItemNeighbor, ProcurementItem
 from .candidate_index import build_candidate_index, candidate_ids
 from .item_quality import is_comparable
 from .normalization import stable_id
+from .semantic_similarity import item_similarity, semantic_tokens
 from .unit_normalization import adjusted_unit_price, comparable_units, is_price_benchmarkable
-
-
-STOPWORDS = {
-    "A",
-    "AS",
-    "COM",
-    "CONTRATACAO",
-    "DA",
-    "DE",
-    "DO",
-    "DOS",
-    "E",
-    "EM",
-    "ITEM",
-    "PARA",
-    "POR",
-    "SERVICO",
-    "SERVICOS",
-}
 
 
 def build_item_clusters(
@@ -44,7 +25,7 @@ def build_cluster_index(
     min_similarity: float = 0.42,
 ) -> tuple[list[ItemCluster], list[ItemClusterMember], list[ItemNeighbor]]:
     comparable = [
-        item for item in items if is_comparable(item) and is_price_benchmarkable(item) and _tokens(item.item_description)
+        item for item in items if is_comparable(item) and is_price_benchmarkable(item) and semantic_tokens(item.item_description)
     ]
     neighbor_map = nearest_neighbors(comparable, k=k, min_similarity=min_similarity)
     graph: dict[str, set[str]] = {item.id: set() for item in comparable}
@@ -109,7 +90,7 @@ def nearest_neighbors(
     k: int = 8,
     min_similarity: float = 0.42,
 ) -> dict[str, list[tuple[str, float]]]:
-    index = build_candidate_index(items, _tokens)
+    index = build_candidate_index(items, semantic_tokens)
     result: dict[str, list[tuple[str, float]]] = {}
     for item in items:
         scored: list[tuple[str, float]] = []
@@ -122,23 +103,6 @@ def nearest_neighbors(
                 scored.append((candidate.id, score))
         result[item.id] = sorted(scored, key=lambda pair: pair[1], reverse=True)[:k]
     return result
-
-
-def item_similarity(left: ProcurementItem, right: ProcurementItem) -> float:
-    left_tokens = _tokens(left.item_description)
-    right_tokens = _tokens(right.item_description)
-    if not left_tokens or not right_tokens:
-        return 0.0
-    score = len(left_tokens & right_tokens) / len(left_tokens | right_tokens)
-    if left.state and left.state == right.state:
-        score += 0.12
-    if left.unit and left.unit == right.unit:
-        score += 0.05
-    elif not comparable_units(left, right):
-        return 0.0
-    if left.item_code and left.item_code == right.item_code:
-        score += 0.12
-    return min(score, 1.0)
 
 
 def _component(start: str, graph: dict[str, set[str]], visited: set[str]) -> list[str]:
@@ -166,14 +130,10 @@ def _cluster_label(items: list[ProcurementItem]) -> str:
     counts: Counter[str] = Counter()
     sources: defaultdict[str, int] = defaultdict(int)
     for item in items:
-        tokens = _tokens(item.item_description)
+        tokens = semantic_tokens(item.item_description)
         counts.update(tokens)
         for token in tokens:
             sources[token] += 1
     ranked = sorted(counts, key=lambda token: (sources[token], counts[token], token), reverse=True)
     label = " ".join(ranked[:6])
     return label or items[0].item_description[:80]
-
-
-def _tokens(text: str) -> set[str]:
-    return {token for token in re.findall(r"[A-Z0-9]{2,}", text.upper()) if token not in STOPWORDS}

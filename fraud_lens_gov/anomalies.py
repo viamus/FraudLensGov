@@ -2,29 +2,13 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from statistics import median
-import re
 
 from .models import Alert, ProcurementItem
 from .candidate_index import CandidateIndex, build_candidate_index, candidate_ids
 from .item_quality import is_comparable
 from .normalization import stable_id
+from .semantic_similarity import item_similarity, semantic_tokens
 from .unit_normalization import adjusted_unit_price, comparable_units, is_price_benchmarkable
-
-
-STOPWORDS = {
-    "A",
-    "AS",
-    "COM",
-    "DA",
-    "DE",
-    "DO",
-    "DOS",
-    "E",
-    "EM",
-    "ITEM",
-    "PARA",
-    "POR",
-}
 
 
 def analyze_items(items: list[ProcurementItem]) -> list[Alert]:
@@ -39,7 +23,7 @@ def analyze_items(items: list[ProcurementItem]) -> list[Alert]:
 def _price_outliers(items: list[ProcurementItem]) -> list[Alert]:
     alerts: list[Alert] = []
     priced_items = [item for item in items if item.unit_price > 0 and is_comparable(item) and is_price_benchmarkable(item)]
-    index = build_candidate_index(priced_items, _tokens)
+    index = build_candidate_index(priced_items, semantic_tokens)
     for item in priced_items:
         neighbors = _nearest_price_neighbors(item, index)
         if len(neighbors) < 3:
@@ -65,7 +49,7 @@ def _price_outliers(items: list[ProcurementItem]) -> list[Alert]:
                         f"{ratio:.1f}x acima da mediana dos vizinhos comparaveis de R$ {baseline:,.2f}."
                     ),
                     evidence={
-                        "method": "textual_knn_median",
+                        "method": "semantic_knn_median_v2",
                         "unit_price": item.unit_price,
                         "adjusted_unit_price": item_price,
                         "unit": item.unit,
@@ -106,34 +90,10 @@ def _nearest_price_neighbors(
             continue
         if not comparable_units(item, candidate):
             continue
-        similarity = _item_similarity(item, candidate)
+        similarity = item_similarity(item, candidate)
         if similarity >= min_similarity:
             scored.append((candidate, similarity))
     return sorted(scored, key=lambda pair: (pair[1], -pair[0].unit_price), reverse=True)[:k]
-
-
-def _item_similarity(left: ProcurementItem, right: ProcurementItem) -> float:
-    left_tokens = _tokens(left.item_description)
-    right_tokens = _tokens(right.item_description)
-    if not left_tokens or not right_tokens:
-        return 0.0
-    overlap = len(left_tokens & right_tokens)
-    union = len(left_tokens | right_tokens)
-    score = overlap / union
-    if left.state and left.state == right.state:
-        score += 0.15
-    if left.unit and left.unit == right.unit:
-        score += 0.05
-    elif not comparable_units(left, right):
-        return 0.0
-    if left.item_code and left.item_code == right.item_code:
-        score += 0.10
-    return min(score, 1.0)
-
-
-def _tokens(text: str) -> set[str]:
-    return {token for token in re.findall(r"[A-Z0-9]{2,}", text.upper()) if token not in STOPWORDS}
-
 
 def _supplier_concentration(items: list[ProcurementItem]) -> list[Alert]:
     grouped: dict[tuple[str, str], list[ProcurementItem]] = defaultdict(list)

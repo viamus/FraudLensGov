@@ -13,7 +13,7 @@ The current prototype uses a small, pinned Python stack:
 - Local SQLite storage for development.
 - Bronze/Silver/Golden processing layers with observable pipeline jobs.
 - Statistical anomaly detection with an initial nearest-neighbor comparable-price strategy.
-- KNN-style lexical clusters persisted locally for comparable item review.
+- Semantic-gated KNN clusters persisted locally for comparable item review.
 - Unit-aware Golden comparability rules: mass/volume normalization, broad-scope blocking, and specification-required item families.
 - Optional OpenAI Responses API explanations.
 - Django 5.2 LTS dashboard with a dark operational audit UI.
