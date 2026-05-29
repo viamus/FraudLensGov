@@ -21,6 +21,8 @@ def get_json(url: str, params: dict[str, Any], timeout: int = 45, retries: int =
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 charset = response.headers.get_content_charset() or "utf-8"
                 return json.loads(response.read().decode(charset))
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            last_error = exc
         except urllib.error.HTTPError as exc:
             last_error = exc
             if exc.code < 500 and exc.code != 429:
