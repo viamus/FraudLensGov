@@ -23,8 +23,8 @@
       <option value="silver" {% if job_table.filters.layer == "silver" %}selected{% endif %}>Silver</option>
       <option value="golden" {% if job_table.filters.layer == "golden" %}selected{% endif %}>Golden</option>
     </select>
-    <button class="button primary" type="submit">Filtrar</button>
-    <a class="button ghost" href="{{ current_path }}">Limpar</a>
+    <button class="button primary" type="submit"><svg><use href="#i-filter"></use></svg><span>Filtrar</span></button>
+    <a class="button ghost" href="{{ current_path }}"><svg><use href="#i-clear"></use></svg><span>Limpar</span></a>
   </form>
   <div class="table-scroll">
     <div class="data-table jobs-table" role="table" aria-label="Jobs de processamento">

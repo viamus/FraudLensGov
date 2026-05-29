@@ -10,8 +10,8 @@
   </div>
   <form class="table-controls" method="get" action="{{ current_path }}">
     <input type="search" name="clusters_q" value="{{ cluster_table.filters.q }}" placeholder="Buscar cluster ou UF">
-    <button class="button primary" type="submit">Filtrar</button>
-    <a class="button ghost" href="{{ current_path }}">Limpar</a>
+    <button class="button primary" type="submit"><svg><use href="#i-filter"></use></svg><span>Filtrar</span></button>
+    <a class="button ghost" href="{{ current_path }}"><svg><use href="#i-clear"></use></svg><span>Limpar</span></a>
   </form>
   <div class="table-scroll">
     <div class="data-table clusters-table" role="table" aria-label="Clusters comparáveis">
@@ -30,7 +30,7 @@
           <span>{{ cluster.avg_unit_price_display }}</span>
           <span>{{ cluster.min_unit_price_display }} a {{ cluster.max_unit_price_display }}</span>
           <span>{{ cluster.states_display }}</span>
-          <a class="button ghost" href="/api/clusters/{{ cluster.id }}">API</a>
+          <a class="button ghost" href="/api/clusters/{{ cluster.id }}"><svg><use href="#i-code"></use></svg><span>API</span></a>
         </div>
       {% empty %}
         <div class="empty-state">Sem clusters comparáveis.</div>

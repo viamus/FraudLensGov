@@ -8,15 +8,15 @@
   </span>
   <div>
     {% if table.page.has_previous %}
-      <a class="button ghost" href="{{ table.page.previous_url }}">Anterior</a>
+      <a class="button ghost" href="{{ table.page.previous_url }}"><svg><use href="#i-chevron-left"></use></svg><span>Anterior</span></a>
     {% else %}
-      <span class="button ghost disabled">Anterior</span>
+      <span class="button ghost disabled"><svg><use href="#i-chevron-left"></use></svg><span>Anterior</span></span>
     {% endif %}
     <span class="page-count">{{ table.page.current }} / {{ table.page.total_pages }}</span>
     {% if table.page.has_next %}
-      <a class="button ghost" href="{{ table.page.next_url }}">Próxima</a>
+      <a class="button ghost" href="{{ table.page.next_url }}"><span>Próxima</span><svg><use href="#i-chevron-right"></use></svg></a>
     {% else %}
-      <span class="button ghost disabled">Próxima</span>
+      <span class="button ghost disabled"><span>Próxima</span><svg><use href="#i-chevron-right"></use></svg></span>
     {% endif %}
   </div>
 </div>

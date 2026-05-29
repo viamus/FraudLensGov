@@ -7,7 +7,7 @@
         <h2>Fila estatística</h2>
       </div>
     </div>
-    <a class="button secondary" href="/api/summary">API</a>
+    <a class="button secondary" href="/api/summary"><svg><use href="#i-code"></use></svg><span>API</span></a>
   </div>
   <form class="table-controls" method="get" action="{{ current_path }}">
     <input type="search" name="alerts_q" value="{{ alert_table.filters.q }}" placeholder="Buscar item, órgão ou fornecedor">
@@ -23,8 +23,8 @@
       <option value="2" {% if alert_table.filters.severity == "2" %}selected{% endif %}>S2</option>
       <option value="1" {% if alert_table.filters.severity == "1" %}selected{% endif %}>S1</option>
     </select>
-    <button class="button primary" type="submit">Filtrar</button>
-    <a class="button ghost" href="{{ current_path }}">Limpar</a>
+    <button class="button primary" type="submit"><svg><use href="#i-filter"></use></svg><span>Filtrar</span></button>
+    <a class="button ghost" href="{{ current_path }}"><svg><use href="#i-clear"></use></svg><span>Limpar</span></a>
   </form>
   <div class="table-scroll">
     <div class="data-table alerts-table" role="table" aria-label="Fila estatística">
