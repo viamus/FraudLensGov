@@ -1,0 +1,22 @@
+<article class="panel">
+  <div class="panel-head">
+    <div class="head-title">
+      <svg><use href="#i-database"></use></svg>
+      <div>
+        <p class="eyebrow">Qualidade</p>
+        <h2>Pronto para análise</h2>
+      </div>
+    </div>
+  </div>
+  <div class="row-list">
+    {% for item in quality %}
+      <div class="data-row {{ item.tone }}">
+        <span>
+          {{ item.label }}
+          <small>{{ item.detail }}</small>
+        </span>
+        <strong>{{ item.value }}</strong>
+      </div>
+    {% endfor %}
+  </div>
+</article>

@@ -68,15 +68,16 @@ def from_pncp_notice(raw: dict[str, Any]) -> ProcurementItem:
 
 
 def from_compras_award(raw: dict[str, Any]) -> ProcurementItem:
-    source_record_id = raw.get("idCompraItem") or raw.get("idContratacaoPNCP") or stable_id(raw)
-    quantity = as_float(raw.get("quantidadeHomologada"), 1.0)
-    unit_price = as_float(raw.get("valorUnitarioHomologado"))
-    total_value = as_float(raw.get("valorTotalHomologado"), quantity * unit_price)
-    item_code = str(raw.get("idCompraItem") or raw.get("numeroItemPncp") or "")
-    procurement_id = str(raw.get("idContratacaoPNCP") or raw.get("idCompra") or "")
-    description = raw.get("descricaoItem") or f"ITEM PNCP {raw.get('numeroItemPncp') or item_code}"
-    unit = raw.get("unidadeMedida") or "UN"
-    item_catalog_code = raw.get("catalogoCodigoItem")
+    source_record_id = _first(raw, "idCompraItem", "id_compra_item", "idContratacaoPNCP", "id_contratacao_pncp") or stable_id(raw)
+    quantity = as_float(_first(raw, "quantidadeHomologada", "quantidade_homologada"), 1.0)
+    unit_price = as_float(_first(raw, "valorUnitarioHomologado", "valor_unitario_homologado"))
+    total_value = as_float(_first(raw, "valorTotalHomologado", "valor_total_homologado"), quantity * unit_price)
+    item_number = _first(raw, "numeroItemPncp", "numero_item", "numero_item_pncp")
+    item_code = str(_first(raw, "idCompraItem", "id_compra_item", "numeroItemPncp", "numero_item", "numero_item_pncp") or "")
+    procurement_id = str(_first(raw, "idContratacaoPNCP", "id_contratacao_pncp", "idCompra", "id_compra") or "")
+    description = _first(raw, "descricaoItem", "descricao_item") or f"ITEM PNCP {item_number or item_code}"
+    unit = _first(raw, "unidadeMedida", "unidade_medida") or "UN"
+    item_catalog_code = _first(raw, "catalogoCodigoItem", "catalogo_codigo_item")
     return ProcurementItem(
         id=stable_id("compras_gov", source_record_id),
         source="compras_gov",
@@ -89,14 +90,22 @@ def from_compras_award(raw: dict[str, Any]) -> ProcurementItem:
         unit_price=unit_price,
         total_value=total_value,
         currency="BRL",
-        agency_name=normalize_text(raw.get("unidadeOrgaoCodigoUnidade") or raw.get("orgaoEntidadeCnpj")),
-        agency_id=str(raw.get("orgaoEntidadeCnpj") or raw.get("unidadeOrgaoCodigoUnidade") or ""),
-        supplier_name=normalize_text(raw.get("nomeRazaoSocialFornecedor")),
-        supplier_id=str(raw.get("niFornecedor") or ""),
+        agency_name=normalize_text(_first(raw, "unidadeOrgaoCodigoUnidade", "unidade_orgao_codigo_unidade", "orgaoEntidadeCnpj", "orgao_entidade_cnpj")),
+        agency_id=str(_first(raw, "orgaoEntidadeCnpj", "orgao_entidade_cnpj", "unidadeOrgaoCodigoUnidade", "unidade_orgao_codigo_unidade") or ""),
+        supplier_name=normalize_text(_first(raw, "nomeRazaoSocialFornecedor", "nome_razao_social_fornecedor")),
+        supplier_id=str(_first(raw, "niFornecedor", "ni_fornecedor") or ""),
         city="",
-        state=normalize_text(raw.get("unidadeOrgaoUfSigla")),
-        procurement_date=(raw.get("dataResultadoPncp") or raw.get("dataInclusaoPncp") or "")[:10],
+        state=normalize_text(_first(raw, "unidadeOrgaoUfSigla", "unidade_orgao_uf_sigla")),
+        procurement_date=str(_first(raw, "dataResultadoPncp", "data_resultado", "data_resultado_pncp", "dataInclusaoPncp", "data_inclusao", "data_inclusao_pncp") or "")[:10],
         modality="",
         portal_url=f"https://pncp.gov.br/app/editais/{procurement_id}" if procurement_id else "",
         source_payload=raw,
     )
+
+
+def _first(raw: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        value = raw.get(key)
+        if value not in (None, ""):
+            return value
+    return None

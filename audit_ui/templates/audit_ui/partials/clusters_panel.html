@@ -1,0 +1,22 @@
+<article class="panel">
+  <div class="panel-head">
+    <div class="head-title">
+      <svg><use href="#i-network"></use></svg>
+      <div>
+        <p class="eyebrow">Clusters</p>
+        <h2>Itens comparáveis</h2>
+      </div>
+    </div>
+  </div>
+  <div class="cluster-list">
+    {% for cluster in clusters %}
+      <a class="cluster-row" href="/api/clusters/{{ cluster.id }}">
+        <strong>{{ cluster.label }}</strong>
+        <span>{{ cluster.item_count }} itens | média {{ cluster.avg_unit_price_display }}</span>
+        <small>{{ cluster.min_unit_price_display }} a {{ cluster.max_unit_price_display }} | {{ cluster.states_display }}</small>
+      </a>
+    {% empty %}
+      <div class="empty-state">Sem clusters comparáveis.</div>
+    {% endfor %}
+  </div>
+</article>

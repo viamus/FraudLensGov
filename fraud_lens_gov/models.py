@@ -88,3 +88,14 @@ class ItemNeighbor:
     neighbor_item_id: str
     similarity: float
     rank: int
+
+
+@dataclass(frozen=True)
+class ItemCategorySuggestion:
+    item_id: str
+    canonical_name: str
+    category: str
+    confidence: float
+    method: str
+    evidence: dict[str, Any]
+    created_at: str = field(default_factory=utc_now)

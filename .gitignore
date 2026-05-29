@@ -28,6 +28,7 @@ data/
 *.sqlite
 *.sqlite3
 reports/
+logs/
 
 # Editors and OS
 .idea/

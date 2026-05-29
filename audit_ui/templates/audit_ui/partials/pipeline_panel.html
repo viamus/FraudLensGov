@@ -1,0 +1,21 @@
+<article class="panel panel-major">
+  <div class="panel-head">
+    <div class="head-title">
+      <svg><use href="#i-layers"></use></svg>
+      <div>
+        <p class="eyebrow">Pipeline</p>
+        <h2>Bronze / Silver / Golden</h2>
+      </div>
+    </div>
+    <a href="/api/pipeline">API</a>
+  </div>
+  <div class="layer-strip">
+    {% for layer in layers %}
+      <div class="layer-box">
+        <span>{{ layer.name }}</span>
+        <strong>{{ layer.value }}</strong>
+        <small>{{ layer.meta }}</small>
+      </div>
+    {% endfor %}
+  </div>
+</article>

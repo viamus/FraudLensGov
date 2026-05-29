@@ -1,0 +1,26 @@
+<article class="panel">
+  <div class="panel-head">
+    <div class="head-title">
+      <svg><use href="#i-layers"></use></svg>
+      <div>
+        <p class="eyebrow">Jobs</p>
+        <h2>Processamento</h2>
+      </div>
+    </div>
+  </div>
+  <div class="job-stack">
+    {% for job in visible_jobs %}
+      <div class="job-row">
+        <div>
+          <strong>{{ job.name }}</strong>
+          <span>{{ job.layer }} | {{ job.current_step }}</span>
+        </div>
+        <span class="status-dot {{ job.status_tone }}">{{ job.status }}</span>
+        <div class="progress"><div style="{{ job.progress_style }}"></div></div>
+        <small>{{ job.progress_display }} | {{ job.message }}</small>
+      </div>
+    {% empty %}
+      <div class="empty-state">Sem jobs registrados.</div>
+    {% endfor %}
+  </div>
+</article>

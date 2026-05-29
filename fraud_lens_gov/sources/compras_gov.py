@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import csv
+import io
+import urllib.request
+
 from .http import get_json
 from .pncp import PncpClient
 from ..models import ProcurementItem
@@ -11,6 +15,7 @@ class ComprasGovClient:
         "https://dadosabertos.compras.gov.br/"
         "modulo-contratacoes/3_consultarResultadoItensContratacoes_PNCP_14133"
     )
+    CSV_REPOSITORY_BASE_URL = "https://repositorio.dados.gov.br/seges/comprasgov/anual"
 
     def __init__(self, pncp_client: PncpClient | None = None):
         self.pncp_client = pncp_client or PncpClient()
@@ -89,11 +94,32 @@ class ComprasGovClient:
         records = payload.get("resultado") or []
         return [record for record in records if isinstance(record, dict)]
 
+    def iter_awarded_item_result_csv_records(
+        self,
+        year: int,
+        *,
+        limit: int | None = None,
+    ):
+        url = self.awarded_item_result_csv_url(year)
+        request = urllib.request.Request(url, headers={"User-Agent": "FraudLensGov/0.1"})
+        with urllib.request.urlopen(request, timeout=120) as response:
+            text_stream = io.TextIOWrapper(response, encoding="utf-8", newline="")
+            reader = csv.DictReader(text_stream)
+            for index, row in enumerate(reader, start=1):
+                yield row
+                if limit is not None and index >= limit:
+                    break
+
+    def awarded_item_result_csv_url(self, year: int) -> str:
+        return f"{self.CSV_REPOSITORY_BASE_URL}/{year}/comprasGOV-anual-VW_DM_PNCP_ITEM_RESULTADO-{year}.csv"
+
     def enrich_award_record(self, record: dict[str, object]) -> dict[str, object]:
-        if record.get("descricaoItem"):
+        if record.get("descricaoItem") or record.get("descricao_item"):
             return record
-        cnpj, year, sequence = _parse_pncp_control(str(record.get("idContratacaoPNCP") or ""))
-        item_number = record.get("numeroItemPncp")
+        cnpj, year, sequence = _parse_pncp_control(
+            str(record.get("idContratacaoPNCP") or record.get("id_contratacao_pncp") or "")
+        )
+        item_number = record.get("numeroItemPncp") or record.get("numero_item") or record.get("numero_item_pncp")
         if not cnpj or not year or not sequence or not item_number:
             return record
         try:
@@ -103,8 +129,8 @@ class ComprasGovClient:
             enriched["descricaoItemEnrichmentError"] = str(exc)
             return enriched
         enriched = dict(record)
-        enriched["descricaoItem"] = item_detail.get("descricao") or record.get("descricaoItem")
-        enriched["unidadeMedida"] = item_detail.get("unidadeMedida") or record.get("unidadeMedida")
+        enriched["descricaoItem"] = item_detail.get("descricao") or record.get("descricaoItem") or record.get("descricao_item")
+        enriched["unidadeMedida"] = item_detail.get("unidadeMedida") or record.get("unidadeMedida") or record.get("unidade_medida")
         enriched["catalogoCodigoItem"] = item_detail.get("catalogoCodigoItem")
         enriched["materialOuServico"] = item_detail.get("materialOuServico")
         enriched["pncpItemDetail"] = item_detail

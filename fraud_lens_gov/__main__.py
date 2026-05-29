@@ -4,6 +4,7 @@ import argparse
 import os
 import subprocess
 import sys
+import time
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from .anomalies import analyze_items
 from .clustering import build_cluster_index
 from .exporting import export_alerts
 from .genai import enrich_alerts_with_genai
+from .item_categorization import categorize_items
 from .normalization import from_compras_award, from_pncp_notice
 from .sample_data import SAMPLE_ITEMS
 from .sources.compras_gov import ComprasGovClient
@@ -76,19 +78,30 @@ def build_parser() -> argparse.ArgumentParser:
     bronze.add_argument("--pncp-page-size", type=int, default=50, help="PNCP page size.")
     bronze.add_argument("--compras-page-size", type=int, default=10, help="Compras.gov.br page size.")
     bronze.add_argument("--modality", type=int, default=6, help="PNCP modality code. Default: 6.")
+    bronze.add_argument("--sleep-seconds", type=float, default=0.0, help="Pause between public API windows.")
     bronze.add_argument("--async", dest="run_async", action="store_true", help="Run in a background process.")
     bronze.add_argument("--job-id", help=argparse.SUPPRESS)
+
+    csv_bronze = sub.add_parser("backfill-compras-csv", help="Backfill Compras.gov annual CSV files into Bronze.")
+    csv_bronze.add_argument("--start-year", type=int, default=2021)
+    csv_bronze.add_argument("--end-year", type=int, default=date.today().year)
+    csv_bronze.add_argument("--limit-per-year", type=int, help="Maximum CSV rows to ingest per year.")
+    csv_bronze.add_argument("--batch-size", type=int, default=1000)
+    csv_bronze.add_argument("--async", dest="run_async", action="store_true", help="Run in a background process.")
+    csv_bronze.add_argument("--job-id", help=argparse.SUPPRESS)
 
     silver = sub.add_parser("build-silver", help="Normalize Bronze records and enrich item metadata.")
     silver.add_argument("--source", choices=["both", "pncp", "compras_gov"], default="both")
     silver.add_argument("--limit", type=int, help="Maximum pending Bronze records to process.")
     silver.add_argument("--skip-enrichment", action="store_true", help="Normalize without calling complementary APIs.")
+    silver.add_argument("--sleep-seconds", type=float, default=0.0, help="Pause after each normalized record.")
     silver.add_argument("--async", dest="run_async", action="store_true", help="Run in a background process.")
     silver.add_argument("--job-id", help=argparse.SUPPRESS)
 
     golden = sub.add_parser("build-golden", help="Build the Golden layer and optionally run analysis.")
     golden.add_argument("--analyze", action="store_true", help="Run anomaly analysis after building Golden.")
     golden.add_argument("--cluster", action="store_true", help="Build item clusters after building Golden.")
+    golden.add_argument("--categorize", action="store_true", help="Build canonical item category suggestions.")
     golden.add_argument("--k", type=int, default=8, help="Number of nearest neighbors per item.")
     golden.add_argument("--min-similarity", type=float, default=0.42, help="Minimum neighbor similarity.")
     golden.add_argument("--limit", type=int, help="Maximum stale items to materialize in this run.")
@@ -107,6 +120,8 @@ def build_parser() -> argparse.ArgumentParser:
     clusters = sub.add_parser("build-clusters", help="Build KNN-style lexical item clusters.")
     clusters.add_argument("--k", type=int, default=8, help="Number of nearest neighbors per item.")
     clusters.add_argument("--min-similarity", type=float, default=0.42, help="Minimum neighbor similarity.")
+
+    sub.add_parser("build-categories", help="Build auditable item category and canonical-name suggestions.")
 
     genai = sub.add_parser("explain-alerts", help="Use OpenAI Responses API to enrich alert explanations.")
     genai.add_argument("--limit", type=int, default=10, help="Maximum alerts to enrich.")
@@ -186,6 +201,10 @@ def _build_clusters(storage: Storage, k: int = 8, min_similarity: float = 0.42) 
     return len(clusters), len(members)
 
 
+def _build_categories(storage: Storage) -> int:
+    return storage.replace_item_categories(categorize_items(storage.list_items()))
+
+
 def _finish_ingestion(
     storage: Storage,
     run_id: str,
@@ -263,6 +282,8 @@ def _build_bronze_cli_args(args: argparse.Namespace, start_date: date, end_date:
         str(args.compras_page_size),
         "--modality",
         str(args.modality),
+        "--sleep-seconds",
+        str(args.sleep_seconds),
     ]
 
 
@@ -272,6 +293,15 @@ def _build_silver_cli_args(args: argparse.Namespace) -> list[str]:
         result.extend(["--limit", str(args.limit)])
     if args.skip_enrichment:
         result.append("--skip-enrichment")
+    if args.sleep_seconds:
+        result.extend(["--sleep-seconds", str(args.sleep_seconds)])
+    return result
+
+
+def _build_compras_csv_cli_args(args: argparse.Namespace) -> list[str]:
+    result = ["--start-year", str(args.start_year), "--end-year", str(args.end_year), "--batch-size", str(args.batch_size)]
+    if args.limit_per_year is not None:
+        result.extend(["--limit-per-year", str(args.limit_per_year)])
     return result
 
 
@@ -285,6 +315,8 @@ def _build_golden_cli_args(args: argparse.Namespace) -> list[str]:
         result.append("--analyze")
     if args.cluster:
         result.append("--cluster")
+    if args.categorize:
+        result.append("--categorize")
     return result
 
 
@@ -409,6 +441,7 @@ def main(argv: list[str] | None = None) -> int:
             "pncp_page_size": args.pncp_page_size,
             "compras_page_size": args.compras_page_size,
             "modality": args.modality,
+            "sleep_seconds": args.sleep_seconds,
         }
         if args.run_async and not args.job_id:
             job_id = storage.start_pipeline_job("Backfill Bronze", "bronze", params, steps_total)
@@ -454,6 +487,8 @@ def main(argv: list[str] | None = None) -> int:
                         message=f"{totals['written']} Bronze records stored",
                     )
                     print(f"{step_done}/{steps_total} Bronze steps ({(step_done / steps_total) * 100:.1f}%)")
+                    if args.sleep_seconds > 0:
+                        time.sleep(args.sleep_seconds)
 
                 if args.source in {"both", "compras"}:
                     step = f"Compras.gov.br {window_start.isoformat()}..{window_end.isoformat()}"
@@ -485,6 +520,8 @@ def main(argv: list[str] | None = None) -> int:
                         message=f"{totals['written']} Bronze records stored",
                     )
                     print(f"{step_done}/{steps_total} Bronze steps ({(step_done / steps_total) * 100:.1f}%)")
+                    if args.sleep_seconds > 0:
+                        time.sleep(args.sleep_seconds)
         except Exception as exc:
             storage.finish_pipeline_job(job_id, "failed", str(exc))
             raise
@@ -494,6 +531,75 @@ def main(argv: list[str] | None = None) -> int:
             "Bronze complete: "
             f"{totals['read']} read, {totals['written']} stored, {totals['failed']} failed windows."
         )
+        return 0
+
+    if command == "backfill-compras-csv":
+        if args.start_year > args.end_year:
+            raise SystemExit("start-year must be before or equal to end-year")
+        years = list(range(args.start_year, args.end_year + 1))
+        params = {
+            "source": "compras_gov_csv",
+            "start_year": args.start_year,
+            "end_year": args.end_year,
+            "limit_per_year": args.limit_per_year,
+            "batch_size": args.batch_size,
+        }
+        if args.run_async and not args.job_id:
+            job_id = storage.start_pipeline_job("Backfill Compras CSV", "bronze", params, len(years))
+            _launch_async(args, "backfill-compras-csv", _build_compras_csv_cli_args(args), job_id)
+            return 0
+
+        job_id = args.job_id or storage.start_pipeline_job("Backfill Compras CSV", "bronze", params, len(years))
+        client = ComprasGovClient()
+        total_written = 0
+        failed = 0
+        try:
+            for year_index, year in enumerate(years, start=1):
+                step = f"Compras.gov CSV {year}"
+                storage.update_pipeline_job(
+                    job_id,
+                    current_step=step,
+                    steps_done=year_index - 1,
+                    steps_total=len(years),
+                    message=f"{total_written} Bronze records stored",
+                )
+                batch: list[dict[str, object]] = []
+                year_written = 0
+                try:
+                    for record in client.iter_awarded_item_result_csv_records(year, limit=args.limit_per_year):
+                        batch.append(record)
+                        if len(batch) >= max(args.batch_size, 1):
+                            year_written += storage.upsert_bronze_records(
+                                "compras_gov",
+                                batch,
+                                {**params, "year": year, "repository_url": client.awarded_item_result_csv_url(year)},
+                            )
+                            total_written += len(batch)
+                            batch = []
+                    if batch:
+                        year_written += storage.upsert_bronze_records(
+                            "compras_gov",
+                            batch,
+                            {**params, "year": year, "repository_url": client.awarded_item_result_csv_url(year)},
+                        )
+                        total_written += len(batch)
+                except Exception as exc:
+                    failed += 1
+                    print(f"Failed CSV {year}: {exc}")
+                storage.update_pipeline_job(
+                    job_id,
+                    current_step=step,
+                    steps_done=year_index,
+                    steps_total=len(years),
+                    message=f"{total_written} Bronze records stored",
+                )
+                print(f"{year_index}/{len(years)} CSV years ({(year_index / len(years)) * 100:.1f}%): {year_written} rows")
+        except Exception as exc:
+            storage.finish_pipeline_job(job_id, "failed", str(exc))
+            raise
+        status = "success" if failed == 0 else "partial"
+        storage.finish_pipeline_job(job_id, status, "" if status == "success" else f"{failed} years failed")
+        print(f"Compras CSV complete: {total_written} rows stored, {failed} failed years.")
         return 0
 
     if command == "build-silver":
@@ -551,17 +657,20 @@ def main(argv: list[str] | None = None) -> int:
             )
             if index == 1 or index == steps_total or index % 25 == 0:
                 print(f"{index}/{steps_total} Silver records ({(index / steps_total) * 100:.1f}%)")
+            if args.sleep_seconds > 0:
+                time.sleep(args.sleep_seconds)
         status = "success" if failed == 0 else "partial"
         storage.finish_pipeline_job(job_id, status, "" if status == "success" else f"{failed} records failed")
         print(f"Silver complete: {written} written, {failed} failed.")
         return 0
 
     if command == "build-golden":
-        steps_total = 1 + int(bool(args.analyze)) + int(bool(args.cluster))
+        steps_total = 1 + int(bool(args.analyze)) + int(bool(args.cluster)) + int(bool(args.categorize))
         stale_count = storage.count_items() if args.full_refresh else storage.count_stale_golden_items()
         params = {
             "analyze": args.analyze,
             "cluster": args.cluster,
+            "categorize": args.categorize,
             "full_refresh": args.full_refresh,
             "limit": args.limit,
             "k": args.k,
@@ -617,6 +726,18 @@ def main(argv: list[str] | None = None) -> int:
                     message=f"{cluster_count} clusters, {member_count} memberships",
                 )
                 print(f"Built {cluster_count} clusters with {member_count} item memberships.")
+            if args.categorize:
+                storage.update_pipeline_job(job_id, current_step="Item categorization", steps_done=step_done, steps_total=steps_total)
+                category_count = _build_categories(storage)
+                step_done += 1
+                storage.update_pipeline_job(
+                    job_id,
+                    current_step="Item categorization",
+                    steps_done=step_done,
+                    steps_total=steps_total,
+                    message=f"{category_count} category suggestions built",
+                )
+                print(f"Built {category_count} category suggestions.")
         except Exception as exc:
             storage.finish_pipeline_job(job_id, "failed", str(exc))
             raise
@@ -712,6 +833,11 @@ def main(argv: list[str] | None = None) -> int:
     if command == "build-clusters":
         cluster_count, member_count = _build_clusters(storage, k=args.k, min_similarity=args.min_similarity)
         print(f"Built {cluster_count} clusters with {member_count} item memberships.")
+        return 0
+
+    if command == "build-categories":
+        category_count = _build_categories(storage)
+        print(f"Built {category_count} category suggestions.")
         return 0
 
     if command == "explain-alerts":

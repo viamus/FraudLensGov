@@ -5,8 +5,10 @@ from statistics import median
 import re
 
 from .models import Alert, ProcurementItem
+from .candidate_index import CandidateIndex, build_candidate_index, candidate_ids
 from .item_quality import is_comparable
 from .normalization import stable_id
+from .unit_normalization import adjusted_unit_price, comparable_units, is_price_benchmarkable
 
 
 STOPWORDS = {
@@ -36,16 +38,18 @@ def analyze_items(items: list[ProcurementItem]) -> list[Alert]:
 
 def _price_outliers(items: list[ProcurementItem]) -> list[Alert]:
     alerts: list[Alert] = []
-    priced_items = [item for item in items if item.unit_price > 0 and is_comparable(item)]
+    priced_items = [item for item in items if item.unit_price > 0 and is_comparable(item) and is_price_benchmarkable(item)]
+    index = build_candidate_index(priced_items, _tokens)
     for item in priced_items:
-        neighbors = _nearest_price_neighbors(item, priced_items)
+        neighbors = _nearest_price_neighbors(item, index)
         if len(neighbors) < 3:
             continue
-        prices = [neighbor.unit_price for neighbor, _ in neighbors]
+        prices = [adjusted_unit_price(neighbor) for neighbor, _ in neighbors]
         baseline = median(prices)
         if baseline <= 0:
             continue
-        ratio = item.unit_price / baseline
+        item_price = adjusted_unit_price(item)
+        ratio = item_price / baseline
         if ratio >= 1.8:
             severity = 3 if ratio >= 2.5 else 2
             alerts.append(
@@ -57,12 +61,14 @@ def _price_outliers(items: list[ProcurementItem]) -> list[Alert]:
                     score=round(min(ratio / 3.0, 1.0), 4),
                     title="Preco unitario acima de vizinhos comparaveis",
                     explanation=(
-                        f"O preco unitario de R$ {item.unit_price:,.2f} esta "
-                        f"{ratio:.1f}x acima da mediana dos vizinhos de R$ {baseline:,.2f}."
+                        f"O preco normalizado de R$ {item_price:,.2f} esta "
+                        f"{ratio:.1f}x acima da mediana dos vizinhos comparaveis de R$ {baseline:,.2f}."
                     ),
                     evidence={
                         "method": "textual_knn_median",
                         "unit_price": item.unit_price,
+                        "adjusted_unit_price": item_price,
+                        "unit": item.unit,
                         "neighbor_median": baseline,
                         "ratio": ratio,
                         "comparison_count": len(neighbors),
@@ -74,6 +80,7 @@ def _price_outliers(items: list[ProcurementItem]) -> list[Alert]:
                                 "description": neighbor.item_description,
                                 "state": neighbor.state,
                                 "unit_price": neighbor.unit_price,
+                                "unit": neighbor.unit,
                                 "similarity": round(similarity, 4),
                             }
                             for neighbor, similarity in neighbors[:5]
@@ -86,15 +93,18 @@ def _price_outliers(items: list[ProcurementItem]) -> list[Alert]:
 
 def _nearest_price_neighbors(
     item: ProcurementItem,
-    candidates: list[ProcurementItem],
+    index: CandidateIndex,
     k: int = 12,
     min_similarity: float = 0.45,
 ) -> list[tuple[ProcurementItem, float]]:
     scored: list[tuple[ProcurementItem, float]] = []
-    for candidate in candidates:
-        if candidate.id == item.id:
-            continue
+    for candidate_id in candidate_ids(item, index, max_candidates=max(800, k * 90)):
+        candidate = index.by_id[candidate_id]
         if not is_comparable(candidate):
+            continue
+        if not is_price_benchmarkable(candidate):
+            continue
+        if not comparable_units(item, candidate):
             continue
         similarity = _item_similarity(item, candidate)
         if similarity >= min_similarity:
@@ -114,6 +124,8 @@ def _item_similarity(left: ProcurementItem, right: ProcurementItem) -> float:
         score += 0.15
     if left.unit and left.unit == right.unit:
         score += 0.05
+    elif not comparable_units(left, right):
+        return 0.0
     if left.item_code and left.item_code == right.item_code:
         score += 0.10
     return min(score, 1.0)

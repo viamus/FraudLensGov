@@ -1,0 +1,24 @@
+<article class="panel">
+  <div class="panel-head">
+    <div class="head-title">
+      <svg><use href="#i-database"></use></svg>
+      <div>
+        <p class="eyebrow">Ingestão</p>
+        <h2>Execuções recentes</h2>
+      </div>
+    </div>
+  </div>
+  <div class="run-list">
+    {% for run in ingestion_runs %}
+      <div class="run-row">
+        <div>
+          <strong>{{ run.source }}</strong>
+          <span>{{ run.records_written }} gravados de {{ run.records_read }}</span>
+        </div>
+        <span class="status-dot {{ run.status_tone }}">{{ run.status }}</span>
+      </div>
+    {% empty %}
+      <div class="empty-state">Sem ingestões registradas.</div>
+    {% endfor %}
+  </div>
+</article>

@@ -4,8 +4,10 @@ import re
 from collections import Counter, defaultdict
 
 from .models import ItemCluster, ItemClusterMember, ItemNeighbor, ProcurementItem
+from .candidate_index import build_candidate_index, candidate_ids
 from .item_quality import is_comparable
 from .normalization import stable_id
+from .unit_normalization import adjusted_unit_price, comparable_units, is_price_benchmarkable
 
 
 STOPWORDS = {
@@ -41,7 +43,9 @@ def build_cluster_index(
     k: int = 8,
     min_similarity: float = 0.42,
 ) -> tuple[list[ItemCluster], list[ItemClusterMember], list[ItemNeighbor]]:
-    comparable = [item for item in items if is_comparable(item) and _tokens(item.item_description)]
+    comparable = [
+        item for item in items if is_comparable(item) and is_price_benchmarkable(item) and _tokens(item.item_description)
+    ]
     neighbor_map = nearest_neighbors(comparable, k=k, min_similarity=min_similarity)
     graph: dict[str, set[str]] = {item.id: set() for item in comparable}
     by_id = {item.id: item for item in comparable}
@@ -71,7 +75,7 @@ def build_cluster_index(
         component_items = [by_id[item_id] for item_id in component_ids]
         label = _cluster_label(component_items)
         cluster_id = stable_id("cluster", label, ",".join(sorted(component_ids)))
-        prices = [row.unit_price for row in component_items if row.unit_price > 0]
+        prices = [adjusted_unit_price(row) for row in component_items if adjusted_unit_price(row) > 0]
         clusters.append(
             ItemCluster(
                 id=cluster_id,
@@ -105,11 +109,13 @@ def nearest_neighbors(
     k: int = 8,
     min_similarity: float = 0.42,
 ) -> dict[str, list[tuple[str, float]]]:
+    index = build_candidate_index(items, _tokens)
     result: dict[str, list[tuple[str, float]]] = {}
     for item in items:
         scored: list[tuple[str, float]] = []
-        for candidate in items:
-            if candidate.id == item.id:
+        for candidate_id in candidate_ids(item, index, max_candidates=max(700, k * 80)):
+            candidate = index.by_id[candidate_id]
+            if not comparable_units(item, candidate):
                 continue
             score = item_similarity(item, candidate)
             if score >= min_similarity:
@@ -128,6 +134,8 @@ def item_similarity(left: ProcurementItem, right: ProcurementItem) -> float:
         score += 0.12
     if left.unit and left.unit == right.unit:
         score += 0.05
+    elif not comparable_units(left, right):
+        return 0.0
     if left.item_code and left.item_code == right.item_code:
         score += 0.12
     return min(score, 1.0)

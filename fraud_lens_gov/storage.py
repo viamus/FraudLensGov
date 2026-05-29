@@ -6,9 +6,19 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Iterable
 
-from .models import Alert, IngestionRun, ItemCluster, ItemClusterMember, ItemNeighbor, ProcurementItem, utc_now
+from .models import (
+    Alert,
+    IngestionRun,
+    ItemCategorySuggestion,
+    ItemCluster,
+    ItemClusterMember,
+    ItemNeighbor,
+    ProcurementItem,
+    utc_now,
+)
 from .item_quality import description_quality
 from .normalization import stable_id
+from .unit_normalization import adjusted_price_for_unit
 
 
 class Storage:
@@ -163,6 +173,20 @@ class Storage:
                     FOREIGN KEY(item_id) REFERENCES procurement_items(id) ON DELETE CASCADE,
                     FOREIGN KEY(neighbor_item_id) REFERENCES procurement_items(id) ON DELETE CASCADE
                 );
+
+                CREATE TABLE IF NOT EXISTS item_category_suggestions (
+                    item_id TEXT PRIMARY KEY,
+                    canonical_name TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    confidence REAL NOT NULL,
+                    method TEXT NOT NULL,
+                    evidence TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(item_id) REFERENCES procurement_items(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_item_category_suggestions_category
+                    ON item_category_suggestions(category, confidence);
                 """
             )
             conn.execute(
@@ -421,7 +445,7 @@ class Storage:
         now = utc_now()
         with self.connect() as conn:
             row = conn.execute(
-                "SELECT steps_total FROM pipeline_jobs WHERE id = ?",
+                "SELECT steps_total, steps_done FROM pipeline_jobs WHERE id = ?",
                 (job_id,),
             ).fetchone()
             total = max(int(steps_total if steps_total is not None else (row["steps_total"] if row else 1)), 1)
@@ -441,7 +465,7 @@ class Storage:
         now = utc_now()
         with self.connect() as conn:
             row = conn.execute(
-                "SELECT steps_total FROM pipeline_jobs WHERE id = ?",
+                "SELECT steps_total, steps_done FROM pipeline_jobs WHERE id = ?",
                 (job_id,),
             ).fetchone()
             total = max(int(row["steps_total"] if row else 1), 1)
@@ -612,6 +636,29 @@ class Storage:
                 [asdict(neighbor) for neighbor in neighbor_rows],
             )
 
+    def replace_item_categories(self, suggestions: Iterable[ItemCategorySuggestion]) -> int:
+        rows = list(suggestions)
+        with self.connect() as conn:
+            conn.executemany(
+                """
+                INSERT INTO item_category_suggestions (
+                    item_id, canonical_name, category, confidence, method, evidence, created_at
+                )
+                VALUES (
+                    :item_id, :canonical_name, :category, :confidence, :method, :evidence, :created_at
+                )
+                ON CONFLICT(item_id) DO UPDATE SET
+                    canonical_name = excluded.canonical_name,
+                    category = excluded.category,
+                    confidence = excluded.confidence,
+                    method = excluded.method,
+                    evidence = excluded.evidence,
+                    created_at = excluded.created_at
+                """,
+                [self._category_to_row(suggestion) for suggestion in rows],
+            )
+        return len(rows)
+
     def list_item_clusters(self, limit: int = 10) -> list[ItemCluster]:
         with self.connect() as conn:
             rows = conn.execute(
@@ -696,6 +743,7 @@ class Storage:
         return [dict(row) for row in rows]
 
     def knn_review_queue(self, limit: int = 25) -> list[dict[str, object]]:
+        fetch_limit = max(limit * 20, 250)
         with self.connect() as conn:
             rows = conn.execute(
                 """
@@ -744,12 +792,19 @@ class Storage:
                 FROM pairs p
                 JOIN procurement_items l ON l.id = p.left_id
                 JOIN procurement_items r ON r.id = p.right_id
+                WHERE l.unit_price > 0.05
+                  AND r.unit_price > 0.05
                 ORDER BY p.similarity DESC, price_ratio DESC, price_delta DESC
                 LIMIT ?
                 """,
-                (limit,),
+                (fetch_limit,),
             ).fetchall()
-        return [dict(row) for row in rows]
+        review_rows = [self._knn_review_summary(row) for row in rows]
+        return sorted(
+            review_rows,
+            key=lambda row: (row["similarity"], row["price_ratio"], row["price_delta"]),
+            reverse=True,
+        )[:limit]
 
     def knn_blocked_items(self, limit: int = 20) -> list[dict[str, object]]:
         with self.connect() as conn:
@@ -777,7 +832,9 @@ class Storage:
                         WHEN 'missing' THEN 1
                         WHEN 'generic' THEN 2
                         WHEN 'weak' THEN 3
-                        ELSE 4
+                        WHEN 'spec_required' THEN 4
+                        WHEN 'broad_scope' THEN 5
+                        ELSE 6
                     END,
                     p.total_value DESC
                 LIMIT ?
@@ -937,6 +994,28 @@ class Storage:
                 LIMIT 8
                 """
             ).fetchall()
+            category_totals = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS categorized,
+                    SUM(CASE WHEN confidence >= 0.55 THEN 1 ELSE 0 END) AS confident,
+                    SUM(CASE WHEN evidence LIKE '%"needs_rag": true%' THEN 1 ELSE 0 END) AS needs_rag
+                FROM item_category_suggestions
+                """
+            ).fetchone()
+            top_categories = conn.execute(
+                """
+                SELECT
+                    category,
+                    COUNT(*) AS item_count,
+                    ROUND(AVG(confidence), 4) AS avg_confidence,
+                    SUM(CASE WHEN evidence LIKE '%"needs_rag": true%' THEN 1 ELSE 0 END) AS needs_rag
+                FROM item_category_suggestions
+                GROUP BY category
+                ORDER BY item_count DESC, avg_confidence DESC
+                LIMIT 8
+                """
+            ).fetchall()
             ingestion_runs = conn.execute(
                 """
                 SELECT * FROM ingestion_runs
@@ -962,6 +1041,9 @@ class Storage:
                     SUM(CASE WHEN quality_level = 'generic' THEN 1 ELSE 0 END) AS generic,
                     SUM(CASE WHEN quality_level = 'missing' THEN 1 ELSE 0 END) AS missing,
                     SUM(CASE WHEN quality_level = 'weak' THEN 1 ELSE 0 END) AS weak,
+                    SUM(CASE WHEN quality_level = 'broad_scope' THEN 1 ELSE 0 END) AS broad_scope,
+                    SUM(CASE WHEN quality_level = 'spec_required' THEN 1 ELSE 0 END) AS spec_required,
+                    SUM(CASE WHEN quality_level = 'unit_unknown' THEN 1 ELSE 0 END) AS unit_unknown,
                     SUM(CASE WHEN quality_level = 'usable' THEN 1 ELSE 0 END) AS usable,
                     SUM(CASE WHEN quality_level = 'procurement_scope' THEN 1 ELSE 0 END) AS procurement_scope
                 FROM golden_items
@@ -974,6 +1056,8 @@ class Storage:
             "top_alerts": [self._alert_summary(row) for row in top_alerts],
             "cluster_totals": dict(cluster_totals),
             "top_clusters": [self._cluster_summary(row) for row in top_clusters],
+            "category_totals": self._none_to_zero(dict(category_totals)),
+            "top_categories": [self._category_summary(row) for row in top_categories],
             "ingestion_runs": [self._ingestion_run_summary(row) for row in ingestion_runs],
             "layers": {
                 "bronze": self._none_to_zero(dict(bronze)),
@@ -1060,6 +1144,16 @@ class Storage:
         return data
 
     @staticmethod
+    def _category_to_row(suggestion: ItemCategorySuggestion) -> dict[str, object]:
+        row = asdict(suggestion)
+        row["evidence"] = json.dumps(suggestion.evidence, ensure_ascii=False, sort_keys=True)
+        return row
+
+    @staticmethod
+    def _category_summary(row: sqlite3.Row) -> dict[str, object]:
+        return dict(row)
+
+    @staticmethod
     def _ingestion_run_summary(row: sqlite3.Row) -> dict[str, object]:
         data = dict(row)
         data["parameters"] = json.loads(data["parameters"] or "{}")
@@ -1070,6 +1164,24 @@ class Storage:
         data = dict(row)
         data["description_quality"] = Storage._description_quality_from_row(row)
         data.pop("source_payload", None)
+        return data
+
+    @staticmethod
+    def _knn_review_summary(row: sqlite3.Row) -> dict[str, object]:
+        data = dict(row)
+        unit_price = float(data.get("unit_price") or 0)
+        neighbor_unit_price = float(data.get("neighbor_unit_price") or 0)
+        adjusted = adjusted_price_for_unit(str(data.get("unit") or ""), unit_price)
+        neighbor_adjusted = adjusted_price_for_unit(str(data.get("neighbor_unit") or ""), neighbor_unit_price)
+        data["adjusted_unit_price"] = adjusted
+        data["neighbor_adjusted_unit_price"] = neighbor_adjusted
+        data["price_delta"] = abs(adjusted - neighbor_adjusted)
+        if adjusted <= 0 or neighbor_adjusted <= 0:
+            data["price_ratio"] = 0.0
+        elif adjusted >= neighbor_adjusted:
+            data["price_ratio"] = adjusted / neighbor_adjusted
+        else:
+            data["price_ratio"] = neighbor_adjusted / adjusted
         return data
 
     @staticmethod
@@ -1122,10 +1234,10 @@ class Storage:
             item_number = str(record.get("numeroCompra") or "")
             record_date = str(record.get("dataPublicacaoPncp") or record.get("dataInclusao") or "")[:10]
         elif source == "compras_gov":
-            source_record_id = str(record.get("idCompraItem") or record.get("idContratacaoPNCP") or stable_id(record))
-            procurement_id = str(record.get("idContratacaoPNCP") or record.get("idCompra") or "")
-            item_number = str(record.get("numeroItemPncp") or record.get("idCompraItem") or "")
-            record_date = str(record.get("dataResultadoPncp") or record.get("dataInclusaoPncp") or "")[:10]
+            source_record_id = str(record.get("idCompraItem") or record.get("id_compra_item") or record.get("idContratacaoPNCP") or record.get("id_contratacao_pncp") or stable_id(record))
+            procurement_id = str(record.get("idContratacaoPNCP") or record.get("id_contratacao_pncp") or record.get("idCompra") or record.get("id_compra") or "")
+            item_number = str(record.get("numeroItemPncp") or record.get("numero_item") or record.get("numero_item_pncp") or record.get("idCompraItem") or record.get("id_compra_item") or "")
+            record_date = str(record.get("dataResultadoPncp") or record.get("data_resultado") or record.get("data_resultado_pncp") or record.get("dataInclusaoPncp") or record.get("data_inclusao") or record.get("data_inclusao_pncp") or "")[:10]
         else:
             source_record_id = stable_id(record)
         return {

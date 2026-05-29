@@ -8,214 +8,106 @@
   <link rel="stylesheet" href="{% static 'audit_ui/app.css' %}">
 </head>
 <body>
-  <div class="app-shell">
-    <header class="topbar">
+  <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="i-dashboard" viewBox="0 0 24 24"><path d="M4 13h7V4H4v9Zm9 7h7V4h-7v16ZM4 20h7v-5H4v5Z"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-7 9 7 4 7-4m-14 4 7 4 7-4"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.4 2.8 8.3 7 10 4.2-1.7 7-5.6 7-10V6l-7-3Z"/></symbol>
+    <symbol id="i-network" viewBox="0 0 24 24"><path d="M7 7a3 3 0 1 0 0 .1M17 7a3 3 0 1 0 0 .1M12 17a3 3 0 1 0 0 .1M9.5 8.5l5 0M8.5 9.5l2.5 5M15.5 9.5l-2.5 5"/></symbol>
+    <symbol id="i-tags" viewBox="0 0 24 24"><path d="M4 5v6l8 8 7-7-8-7H4Zm4 4h.01M14 5l6 6"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24"><path d="M5 6c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3Zm0 0v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19L12 3Zm0 6v5m0 3h.01"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></symbol>
+  </svg>
+
+  <div class="app-frame">
+    <aside class="sidebar" aria-label="Menu principal">
       <div class="brand">
         <div class="brand-mark">FG</div>
         <div>
-          <h1>FraudLensGov</h1>
-          <p>Console de auditoria para compras públicas</p>
+          <strong>FraudLensGov</strong>
+          <span>Audit console</span>
         </div>
       </div>
-      <div class="topbar-actions">
-        <span class="status-pill {{ posture.tone }}">{{ posture.label }}</span>
-        <span class="source-pill">SQLite</span>
-      </div>
-    </header>
 
-    <main class="workspace">
-      <section class="metric-grid" aria-label="Indicadores principais">
-        {% for metric in metrics %}
-          <article class="metric">
-            <span>{{ metric.label }}</span>
-            <strong>{{ metric.value }}</strong>
-            <small>{{ metric.note }}</small>
-          </article>
+      <nav class="main-menu">
+        {% for item in nav_items %}
+          <a href="{{ item.href }}" class="menu-item{% if item.active %} active{% endif %}">
+            <svg><use href="#{{ item.icon }}"></use></svg>
+            <span>{{ item.label }}</span>
+          </a>
         {% endfor %}
-      </section>
+      </nav>
 
-      <section class="panel panel-span">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">Pipeline</p>
-            <h2>Bronze / Silver / Golden</h2>
-          </div>
-          <a href="/api/pipeline">API</a>
-        </div>
-        <div class="pipeline-layout">
-          <div class="layer-strip">
-            {% for layer in layers %}
-              <div class="layer-box">
-                <span>{{ layer.name }}</span>
-                <strong>{{ layer.value }}</strong>
-                <small>{{ layer.meta }}</small>
-              </div>
-            {% endfor %}
-          </div>
-          <div class="quality-stack">
-            {% for item in quality %}
-              <div class="quality-row">
-                <span>{{ item.label }}</span>
-                <strong>{{ item.value }}</strong>
-              </div>
-            {% endfor %}
-          </div>
-          <div class="job-stack">
-            {% for job in jobs|slice:":3" %}
-              <div class="job-row">
-                <div>
-                  <strong>{{ job.name }}</strong>
-                  <span>{{ job.layer }} | {{ job.current_step }}</span>
-                </div>
-                <span class="status-dot {{ job.status_tone }}">{{ job.status }}</span>
-                <div class="progress"><div style="{{ job.progress_style }}"></div></div>
-                <small>{{ job.progress_display }} | {{ job.message }}</small>
-              </div>
-            {% empty %}
-              <div class="empty-state">Sem jobs registrados.</div>
-            {% endfor %}
-          </div>
-        </div>
-      </section>
+      <div class="sidebar-foot">
+        <span>Base ativa</span>
+        <strong>SQLite local</strong>
+      </div>
+    </aside>
 
-      <section class="panel panel-span">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">Revisão KNN</p>
-            <h2>Pares comparáveis</h2>
-          </div>
-          <a href="/api/knn-review">API</a>
+    <div class="page">
+      <header class="commandbar">
+        <div>
+          <p class="eyebrow">Painel de risco</p>
+          <h1>{{ page_title }}</h1>
+          <p>{{ page_subtitle }}</p>
         </div>
-        <div class="knn-layout">
-          <div class="knn-pair-list">
-            {% for pair in knn_pairs %}
-              <article class="knn-pair">
-                <div class="pair-head">
-                  <strong>Similaridade {{ pair.similarity_display }}</strong>
-                  <span>{{ pair.ratio_display }}</span>
-                </div>
-                <div class="pair-columns">
-                  <div>
-                    <b>{{ pair.item_description }}</b>
-                    <span>{{ pair.state }} | {{ pair.unit }} | {{ pair.unit_price_display }}</span>
-                    <small>{{ pair.agency_name }}</small>
-                  </div>
-                  <div>
-                    <b>{{ pair.neighbor_description }}</b>
-                    <span>{{ pair.neighbor_state }} | {{ pair.neighbor_unit }} | {{ pair.neighbor_unit_price_display }}</span>
-                    <small>{{ pair.neighbor_agency_name }}</small>
-                  </div>
-                </div>
-              </article>
-            {% empty %}
-              <div class="empty-state">Sem pares KNN materializados.</div>
-            {% endfor %}
-          </div>
+        <div class="command-actions">
+          <span class="status-pill {{ posture.tone }}">{{ posture.label }}</span>
+          <a class="icon-link" href="/api/summary"><svg><use href="#i-link"></use></svg><span>API</span></a>
+        </div>
+      </header>
 
-          <div class="blocked-panel">
-            <div class="subhead">
-              <p class="eyebrow">Bloqueios</p>
-              <h3>Qualidade insuficiente</h3>
-            </div>
-            <div class="blocked-list">
-              {% for item in blocked_items %}
-                <article class="blocked-row {{ item.tone }}">
-                  <strong>{{ item.display_description }}</strong>
-                  <span>{{ item.quality_label }} | {{ item.quality_reason }}</span>
-                  <small>{{ item.reference_display }} | {{ item.total_value_display }}</small>
+      <main class="content">
+        {% if active_page == "overview" %}
+          <section class="section">
+            <div class="metric-grid" aria-label="Indicadores principais">
+              {% for metric in metrics %}
+                <article class="metric">
+                  <span>{{ metric.label }}</span>
+                  <strong>{{ metric.value }}</strong>
+                  <small>{{ metric.note }}</small>
                 </article>
-              {% empty %}
-                <div class="empty-state">Sem bloqueios pendentes.</div>
               {% endfor %}
             </div>
-          </div>
-        </div>
-      </section>
+          </section>
+          <section class="section two-column">
+            {% include "audit_ui/partials/alerts_panel.html" with limit=5 %}
+            {% include "audit_ui/partials/quality_panel.html" %}
+          </section>
+        {% endif %}
 
-      <section class="panel">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">Clusters</p>
-            <h2>Itens comparáveis</h2>
-          </div>
-        </div>
-        <div class="cluster-list">
-          {% for cluster in clusters %}
-            <a class="cluster-row" href="/api/clusters/{{ cluster.id }}">
-              <strong>{{ cluster.label }}</strong>
-              <span>{{ cluster.item_count }} itens | média {{ cluster.avg_unit_price_display }}</span>
-              <small>{{ cluster.min_unit_price_display }} a {{ cluster.max_unit_price_display }} | {{ cluster.states_display }}</small>
-            </a>
-          {% empty %}
-            <div class="empty-state">Sem clusters comparáveis.</div>
-          {% endfor %}
-        </div>
-      </section>
+        {% if active_page == "pipeline" %}
+          <section class="section two-column">
+            {% include "audit_ui/partials/pipeline_panel.html" %}
+            {% include "audit_ui/partials/quality_panel.html" %}
+          </section>
+          <section class="section">
+            {% include "audit_ui/partials/jobs_panel.html" with limit=6 %}
+          </section>
+        {% endif %}
 
-      <section class="panel">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">Alertas</p>
-            <h2>Fila estatística</h2>
-          </div>
-        </div>
-        <div class="alert-list">
-          {% for alert in top_alerts %}
-            <a class="alert-row" href="/api/alerts/{{ alert.id }}">
-              <span class="severity">S{{ alert.severity }}</span>
-              <div>
-                <strong>{{ alert.title }}</strong>
-                <span>{{ alert.item_description }}</span>
-                <small>{{ alert.total_value_display }} | score {{ alert.score_display }} | {{ alert.quality_level }}</small>
-              </div>
-            </a>
-          {% empty %}
-            <div class="empty-state">Sem alerta estatístico ativo.</div>
-          {% endfor %}
-        </div>
-      </section>
+        {% if active_page == "investigacao" %}
+          <section class="section two-column">
+            {% include "audit_ui/partials/alerts_panel.html" with limit=12 %}
+            {% include "audit_ui/partials/knn_panel.html" with limit=8 %}
+          </section>
+        {% endif %}
 
-      <section class="panel">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">Risco</p>
-            <h2>Tipologias</h2>
-          </div>
-        </div>
-        <div class="risk-list">
-          {% for risk in risk_types %}
-            <div class="risk-row">
-              <span>{{ risk.label }}</span>
-              <strong>{{ risk.count }}</strong>
-            </div>
-          {% empty %}
-            <div class="empty-state">Sem tipologias ativas.</div>
-          {% endfor %}
-        </div>
-      </section>
+        {% if active_page == "normalizacao" %}
+          <section class="section two-column">
+            {% include "audit_ui/partials/categories_panel.html" %}
+            {% include "audit_ui/partials/clusters_panel.html" %}
+          </section>
+        {% endif %}
 
-      <section class="panel">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">Operação</p>
-            <h2>Ingestões recentes</h2>
-          </div>
-        </div>
-        <div class="run-list">
-          {% for run in ingestion_runs %}
-            <div class="run-row">
-              <div>
-                <strong>{{ run.source }}</strong>
-                <span>{{ run.records_written }} gravados de {{ run.records_read }}</span>
-              </div>
-              <span class="status-dot {{ run.status_tone }}">{{ run.status }}</span>
-            </div>
-          {% empty %}
-            <div class="empty-state">Sem ingestões registradas.</div>
-          {% endfor %}
-        </div>
-      </section>
-    </main>
+        {% if active_page == "operacao" %}
+          <section class="section two-column">
+            {% include "audit_ui/partials/jobs_panel.html" with limit=8 %}
+            {% include "audit_ui/partials/runs_panel.html" %}
+          </section>
+        {% endif %}
+      </main>
+    </div>
   </div>
 </body>
 </html>

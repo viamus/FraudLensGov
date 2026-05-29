@@ -11,8 +11,28 @@ from fraud_lens_gov.storage import Storage
 
 
 def dashboard(request):
+    return _render_dashboard(request, "overview")
+
+
+def pipeline_page(request):
+    return _render_dashboard(request, "pipeline")
+
+
+def investigation_page(request):
+    return _render_dashboard(request, "investigacao")
+
+
+def normalization_page(request):
+    return _render_dashboard(request, "normalizacao")
+
+
+def operation_page(request):
+    return _render_dashboard(request, "operacao")
+
+
+def _render_dashboard(request, active_page: str):
     summary = _storage().dashboard_summary()
-    return render(request, "audit_ui/dashboard.html", _dashboard_context(summary))
+    return render(request, "audit_ui/dashboard.html", _dashboard_context(summary, active_page))
 
 
 def summary_api(request):
@@ -67,9 +87,10 @@ def _json(payload: dict[str, Any]) -> JsonResponse:
     return JsonResponse(payload, json_dumps_params={"ensure_ascii": False, "indent": 2})
 
 
-def _dashboard_context(summary: dict[str, Any]) -> dict[str, Any]:
+def _dashboard_context(summary: dict[str, Any], active_page: str = "overview") -> dict[str, Any]:
     totals = _dict(summary.get("totals"))
     alerts = _dict(summary.get("alerts"))
+    category_totals = _dict(summary.get("category_totals"))
     cluster_totals = _dict(summary.get("cluster_totals"))
     layers = _dict(summary.get("layers"))
     golden = _dict(layers.get("golden"))
@@ -80,14 +101,28 @@ def _dashboard_context(summary: dict[str, Any]) -> dict[str, Any]:
     blocked = _as_list(knn_review.get("blocked"))
     jobs = [_job_view(row) for row in _as_list(summary.get("pipeline_jobs"))]
     clusters = [_cluster_view(row) for row in _as_list(summary.get("top_clusters"))]
+    categories = [_category_view(row) for row in _as_list(summary.get("top_categories"))]
     risk_types = [_risk_type_view(row) for row in _as_list(summary.get("risk_types"))]
     top_alerts = [_alert_view(row) for row in _as_list(summary.get("top_alerts"))]
     ingestion_runs = [_run_view(row) for row in _as_list(summary.get("ingestion_runs"))]
+    knn_pairs = [_knn_pair_view(row) for row in pairs]
     comparable = _int(golden.get("comparable"))
-    blocked_total = _int(golden.get("missing")) + _int(golden.get("generic")) + _int(golden.get("weak"))
+    blocked_total = (
+        _int(golden.get("missing"))
+        + _int(golden.get("generic"))
+        + _int(golden.get("weak"))
+        + _int(golden.get("broad_scope"))
+        + _int(golden.get("spec_required"))
+        + _int(golden.get("unit_unknown"))
+    )
     scope_total = _int(golden.get("procurement_scope"))
 
+    page_copy = _page_copy(active_page)
     return {
+        "active_page": active_page,
+        "page_title": page_copy["title"],
+        "page_subtitle": page_copy["subtitle"],
+        "nav_items": _nav_items(active_page),
         "posture": _risk_posture(alerts),
         "metrics": [
             {"label": "Silver total", "value": _int(silver.get("total")), "note": "registros normalizados"},
@@ -114,13 +149,17 @@ def _dashboard_context(summary: dict[str, Any]) -> dict[str, Any]:
                 "meta": f"{comparable} comparáveis | {blocked_total} bloqueados",
             },
         ],
-        "quality": [
-            {"label": "Escopo PNCP", "value": scope_total},
-            {"label": "Descrição ausente", "value": _int(golden.get("missing"))},
-            {"label": "Genéricos", "value": _int(golden.get("generic"))},
-            {"label": "Fracos", "value": _int(golden.get("weak"))},
-        ],
-        "knn_pairs": [_knn_pair_view(row) for row in pairs],
+        "quality": _quality_rows(golden, scope_total),
+        "category_totals": {
+            "categorized": _int(category_totals.get("categorized")),
+            "confident": _int(category_totals.get("confident")),
+            "needs_rag": _int(category_totals.get("needs_rag")),
+        },
+        "categories": categories,
+        "knn_pairs": knn_pairs,
+        "visible_alerts": top_alerts[:5] if active_page == "overview" else top_alerts[:12],
+        "visible_jobs": jobs[:3] if active_page == "overview" else jobs[:8],
+        "visible_knn_pairs": knn_pairs[:8],
         "blocked_items": [_blocked_view(row) for row in blocked],
         "jobs": jobs,
         "clusters": clusters,
@@ -129,6 +168,46 @@ def _dashboard_context(summary: dict[str, Any]) -> dict[str, Any]:
         "ingestion_runs": ingestion_runs,
         "db_path": str(settings.FRAUDLENS_DB),
     }
+
+
+def _page_copy(active_page: str) -> dict[str, str]:
+    pages = {
+        "overview": {
+            "title": "Compras p\u00fablicas em revis\u00e3o",
+            "subtitle": "Resumo executivo do risco, cobertura e material anal\u00edtico pronto.",
+        },
+        "pipeline": {
+            "title": "Pipeline de dados",
+            "subtitle": "Camadas Bronze, Silver e Golden com progresso observ\u00e1vel.",
+        },
+        "investigacao": {
+            "title": "Investiga\u00e7\u00e3o",
+            "subtitle": "Alertas estat\u00edsticos e pares KNN que precisam de revis\u00e3o humana.",
+        },
+        "normalizacao": {
+            "title": "Normaliza\u00e7\u00e3o e categorias",
+            "subtitle": "Categorias candidatas, clusters e fila futura para RAG.",
+        },
+        "operacao": {
+            "title": "Opera\u00e7\u00e3o",
+            "subtitle": "Jobs, ingest\u00f5es recentes e sa\u00fade do processamento local.",
+        },
+    }
+    return pages.get(active_page, pages["overview"])
+
+
+def _nav_items(active_page: str) -> list[dict[str, str]]:
+    items = [
+        ("overview", "Vis\u00e3o geral", "i-dashboard", "/"),
+        ("pipeline", "Pipeline", "i-layers", "/pipeline"),
+        ("investigacao", "Investiga\u00e7\u00e3o", "i-shield", "/investigacao"),
+        ("normalizacao", "Normaliza\u00e7\u00e3o", "i-tags", "/normalizacao"),
+        ("operacao", "Opera\u00e7\u00e3o", "i-database", "/operacao"),
+    ]
+    return [
+        {"key": key, "label": label, "icon": icon, "href": href, "active": key == active_page}
+        for key, label, icon, href in items
+    ]
 
 
 def _risk_posture(alerts: dict[str, Any]) -> dict[str, str]:
@@ -149,6 +228,8 @@ def _knn_pair_view(row: dict[str, Any]) -> dict[str, Any]:
         "ratio_display": f"{ratio:.1f}x" if ratio >= 1.01 else "alinhado",
         "unit_price_display": _money(row.get("unit_price")),
         "neighbor_unit_price_display": _money(row.get("neighbor_unit_price")),
+        "adjusted_unit_price_display": _money(row.get("adjusted_unit_price")),
+        "neighbor_adjusted_unit_price_display": _money(row.get("neighbor_adjusted_unit_price")),
     }
 
 
@@ -193,10 +274,22 @@ def _cluster_view(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _alert_view(row: dict[str, Any]) -> dict[str, Any]:
-    quality = _dict(row.get("description_quality"))
+def _category_view(row: dict[str, Any]) -> dict[str, Any]:
+    avg_confidence = _float(row.get("avg_confidence"))
     return {
         **row,
+        "confidence_display": f"{avg_confidence * 100:.0f}%",
+        "needs_rag": _int(row.get("needs_rag")),
+    }
+
+
+def _alert_view(row: dict[str, Any]) -> dict[str, Any]:
+    quality = _dict(row.get("description_quality"))
+    risk_type = str(row.get("risk_type") or "")
+    return {
+        **row,
+        "display_title": _display_item(row.get("item_description")),
+        "risk_label": _risk_label(risk_type),
         "score_display": f"{_float(row.get('score')):.2f}",
         "total_value_display": _money(row.get("total_value")),
         "quality_level": quality.get("level", "unknown"),
@@ -204,8 +297,34 @@ def _alert_view(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _risk_type_view(row: dict[str, Any]) -> dict[str, Any]:
-    label = str(row.get("risk_type") or "").replace("_", " ").title()
+    label = _risk_label(row.get("risk_type"))
     return {**row, "label": label}
+
+
+def _quality_rows(golden: dict[str, Any], scope_total: int) -> list[dict[str, Any]]:
+    return [
+        {"label": "Escopo PNCP", "value": scope_total, "detail": "objeto de contratação", "tone": "neutral"},
+        {"label": "Descrição ausente", "value": _int(golden.get("missing")), "detail": "sem item publicado", "tone": "critical"},
+        {"label": "Genéricos", "value": _int(golden.get("generic")), "detail": "sem catálogo", "tone": "warning"},
+        {"label": "Fracos", "value": _int(golden.get("weak")), "detail": "texto insuficiente", "tone": "warning"},
+        {"label": "Escopo amplo", "value": _int(golden.get("broad_scope")), "detail": "exige documento", "tone": "warning"},
+        {"label": "Exigem especificação", "value": _int(golden.get("spec_required")), "detail": "SKU incompleto", "tone": "warning"},
+        {"label": "Unidade incerta", "value": _int(golden.get("unit_unknown")), "detail": "fora da régua", "tone": "critical"},
+    ]
+
+
+def _risk_label(value: Any) -> str:
+    labels = {
+        "price_outlier": "Preço fora da curva",
+        "supplier_concentration": "Fornecedor recorrente",
+        "fragmented_purchase": "Possível fracionamento",
+    }
+    return labels.get(str(value or ""), str(value or "Risco").replace("_", " ").title())
+
+
+def _display_item(value: Any) -> str:
+    text = str(value or "").strip()
+    return text if text else "Item sem descrição publicada"
 
 
 def _run_view(row: dict[str, Any]) -> dict[str, Any]:
@@ -217,6 +336,9 @@ def _quality_label(value: Any) -> str:
         "missing": "Descri\u00e7\u00e3o ausente",
         "generic": "Descri\u00e7\u00e3o gen\u00e9rica",
         "weak": "Descri\u00e7\u00e3o fraca",
+        "broad_scope": "Escopo amplo",
+        "spec_required": "Exige especifica\u00e7\u00e3o",
+        "unit_unknown": "Unidade incerta",
         "procurement_scope": "Escopo de contrata\u00e7\u00e3o",
     }
     return labels.get(str(value or "unknown"), "Qualidade indefinida")

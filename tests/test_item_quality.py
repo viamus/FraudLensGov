@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from fraud_lens_gov.anomalies import analyze_items
 from fraud_lens_gov.clustering import build_cluster_index
 from fraud_lens_gov.item_quality import description_quality
@@ -85,6 +87,21 @@ def test_generic_description_becomes_comparable_with_catalog_metadata():
 
     assert quality["level"] == "generic"
     assert quality["comparable"] is True
+
+
+def test_csv_row_id_does_not_count_as_catalog_metadata():
+    item = _item(
+        "CLASSIFICACAO DE PRODUTO MATERIAL",
+        593500,
+        "csv-row",
+        {"numero_item_pncp": "1", "id_compra_item": "ROW-CODE"},
+    )
+    item = replace(item, item_code="ROW-CODE")
+
+    quality = description_quality(item)
+
+    assert quality["level"] == "generic"
+    assert quality["comparable"] is False
 
 
 def test_clustering_excludes_generic_items_without_catalog():

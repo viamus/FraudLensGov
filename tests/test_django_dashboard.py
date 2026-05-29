@@ -35,8 +35,28 @@ def test_django_dashboard_renders_operational_sections(tmp_path: Path):
     assert response.status_code == 200
     html = response.content.decode("utf-8")
     assert "FraudLensGov" in html
-    assert "Revisão KNN" in html
-    assert "Bronze / Silver / Golden" in html
+    assert "Compras públicas em revisão" in html
+    assert "Visão geral" in html
+
+
+def test_django_dashboard_routes_are_separate_pages(tmp_path: Path):
+    db_path = tmp_path / "fraudlens.sqlite"
+    _seed_dashboard_db(db_path)
+
+    with override_settings(FRAUDLENS_DB=str(db_path)):
+        pipeline = Client().get("/pipeline")
+        investigation = Client().get("/investigacao")
+        normalization = Client().get("/normalizacao")
+        operation = Client().get("/operacao")
+
+    assert pipeline.status_code == 200
+    assert "Bronze / Silver / Golden" in pipeline.content.decode("utf-8")
+    assert investigation.status_code == 200
+    assert "Pares para revisão" in investigation.content.decode("utf-8")
+    assert normalization.status_code == 200
+    assert "Categorias candidatas" in normalization.content.decode("utf-8")
+    assert operation.status_code == 200
+    assert "Execuções recentes" in operation.content.decode("utf-8")
 
 
 def test_django_knn_review_api_returns_pairs(tmp_path: Path):

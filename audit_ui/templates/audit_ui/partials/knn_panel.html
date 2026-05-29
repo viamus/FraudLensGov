@@ -1,0 +1,26 @@
+<article class="panel">
+  <div class="panel-head">
+    <div class="head-title">
+      <svg><use href="#i-network"></use></svg>
+      <div>
+        <p class="eyebrow">KNN</p>
+        <h2>Pares para revisão</h2>
+      </div>
+    </div>
+    <a href="/api/knn-review">API</a>
+  </div>
+  <div class="knn-pair-list">
+    {% for pair in visible_knn_pairs %}
+      <article class="knn-pair">
+        <div class="pair-head">
+          <strong>{{ pair.ratio_display }}</strong>
+          <span>sim {{ pair.similarity_display }}</span>
+        </div>
+        <b>{{ pair.item_description }}</b>
+        <small>{{ pair.state }} | {{ pair.unit }} vs {{ pair.neighbor_unit }} | normalizado {{ pair.adjusted_unit_price_display }} vs {{ pair.neighbor_adjusted_unit_price_display }}</small>
+      </article>
+    {% empty %}
+      <div class="empty-state">Sem pares KNN materializados.</div>
+    {% endfor %}
+  </div>
+</article>

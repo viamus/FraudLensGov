@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fraud_lens_gov.anomalies import analyze_items
 from fraud_lens_gov.clustering import build_cluster_index
+from fraud_lens_gov.item_categorization import categorize_items
 from fraud_lens_gov.sample_data import SAMPLE_ITEMS
 from fraud_lens_gov.storage import Storage
 
@@ -82,6 +83,32 @@ def test_storage_tracks_layers_and_pipeline_jobs(tmp_path: Path):
     assert summary["pipeline_jobs"][0]["progress"] == 100.0
 
 
+def test_storage_tracks_failed_pipeline_job_progress(tmp_path: Path):
+    storage = Storage(tmp_path / "fraudlens.sqlite")
+    storage.init_schema()
+    job_id = storage.start_pipeline_job("Backfill", "bronze", {}, steps_total=4)
+    storage.update_pipeline_job(job_id, current_step="step 2", steps_done=2)
+
+    storage.finish_pipeline_job(job_id, "failed", "network timeout")
+
+    job = storage.dashboard_summary()["pipeline_jobs"][0]
+    assert job["status"] == "failed"
+    assert job["progress"] == 50.0
+    assert job["error"] == "network timeout"
+
+
+def test_storage_tracks_item_category_suggestions(tmp_path: Path):
+    storage = Storage(tmp_path / "fraudlens.sqlite")
+    storage.init_schema()
+    storage.upsert_items(SAMPLE_ITEMS)
+
+    assert storage.replace_item_categories(categorize_items(SAMPLE_ITEMS)) == len(SAMPLE_ITEMS)
+    summary = storage.dashboard_summary()
+
+    assert summary["category_totals"]["categorized"] == len(SAMPLE_ITEMS)
+    assert summary["top_categories"]
+
+
 def test_golden_materialization_can_process_only_stale_items(tmp_path: Path):
     storage = Storage(tmp_path / "fraudlens.sqlite")
     storage.init_schema()
@@ -123,3 +150,25 @@ def test_knn_blocked_items_surface_non_comparable_golden_rows(tmp_path: Path):
     assert rows
     assert rows[0]["item_id"] == "blocked-generic-item"
     assert rows[0]["quality_level"] == "generic"
+
+
+def test_golden_summary_counts_specification_required_items(tmp_path: Path):
+    storage = Storage(tmp_path / "fraudlens.sqlite")
+    storage.init_schema()
+    item = replace(
+        SAMPLE_ITEMS[0],
+        id="spec-required-item",
+        source="compras_gov",
+        source_record_id="spec-required-item",
+        item_code="spec-required-item",
+        item_description="SONDA TRATO DIGESTIVO",
+        unit="UNIDADE",
+        source_payload={"numeroItemPncp": 1},
+    )
+
+    storage.upsert_items([item])
+    storage.replace_golden_items([item])
+    summary = storage.dashboard_summary()
+
+    assert summary["layers"]["golden"]["spec_required"] == 1
+    assert storage.knn_blocked_items()[0]["quality_level"] == "spec_required"

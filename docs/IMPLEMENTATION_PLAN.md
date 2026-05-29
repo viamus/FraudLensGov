@@ -36,6 +36,7 @@ Uso primario: itens, resultados homologados, contratos, fornecedores e pesquisa 
 Estrategia:
 
 - Consumir endpoints REST do portal `dadosabertos.compras.gov.br`.
+- Para historico pesado, consumir tambem o repositorio CSV oficial anual em `repositorio.dados.gov.br/seges/comprasgov/anual`.
 - Priorizar endpoints de resultados de itens para obter valor unitario, quantidade, fornecedor e data.
 - Usar endpoints de pesquisa de preco para formar benchmarks por item de catalogo.
 - Guardar schema version e endpoint usado para rastreabilidade.
@@ -175,7 +176,9 @@ Abordagem inicial sem dependencias:
 - Tokenizar descricao normalizada do item.
 - Calcular similaridade textual simples entre itens.
 - Priorizar vizinhos do mesmo estado, unidade e codigo de catalogo quando existirem.
+- Normalizar unidades conversiveis antes do benchmark: KG/Tonelada e L/ML entram na mesma base; unidade, pacote e servico so com familia compativel.
 - Excluir objetos de edital/contratacao sem item, unidade e quantidade reais de qualquer benchmark de preco.
+- Bloquear familias que exigem especificacao tecnica quando nao houver catalogo, complemento ou documento: formulas manipuladas, bundles de refeicao/lanche, sondas/cateteres/proteses e servicos com escopo aberto.
 - Comparar preco unitario do item com a mediana dos K vizinhos mais proximos.
 - Guardar no alerta quais vizinhos formaram a base de comparacao.
 
@@ -226,6 +229,7 @@ Uso da GenAI:
 - Extrair requisitos, marcas, especificacoes restritivas, prazos e criterios de julgamento.
 - Gerar relatorios com evidencias e incertezas.
 - Ajudar a normalizar descricoes livres para categorias/SKUs candidatos, sempre com score e revisao humana.
+- Persistir sugestoes de categoria/nome canonico com metodo, confianca e evidencias para que a versao RAG preencha o mesmo contrato.
 
 Guardrails:
 
@@ -337,14 +341,17 @@ Rodar o pipeline em camadas:
 
 ```powershell
 python -m fraud_lens_gov backfill-bronze --source both --start 2016-05-29 --end 2026-05-29 --window-days 30 --max-pages 1 --async
+python -m fraud_lens_gov backfill-compras-csv --start-year 2021 --end-year 2026 --limit-per-year 5000 --async
 python -m fraud_lens_gov build-silver --source both --async
-python -m fraud_lens_gov build-golden --analyze --cluster --async
+python -m fraud_lens_gov build-golden --analyze --cluster --categorize --async
 ```
+
+Para Compras.gov historico, o CSV anual e preferivel ao REST: a documentacao oficial publica diretorios por ano, com arquivos de resultados de itens, itens de contratacoes e contratacoes. A janela real desse conjunto PNCP/Lei 14.133 comeca em 2021; dados anteriores exigem fontes legadas SIASG/Comprasnet ou conectores locais.
 
 Reprocessar tudo apenas quando a regra de qualidade/comparabilidade mudar:
 
 ```powershell
-python -m fraud_lens_gov build-golden --full-refresh --analyze --cluster
+python -m fraud_lens_gov build-golden --full-refresh --analyze --cluster --categorize
 ```
 
 Reconstruir clusters:

@@ -1,0 +1,29 @@
+<article class="panel">
+  <div class="panel-head">
+    <div class="head-title">
+      <svg><use href="#i-tags"></use></svg>
+      <div>
+        <p class="eyebrow">Normalização</p>
+        <h2>Categorias candidatas</h2>
+      </div>
+    </div>
+  </div>
+  <div class="category-summary">
+    <div class="data-row"><span>Categorizados</span><strong>{{ category_totals.categorized }}</strong></div>
+    <div class="data-row"><span>Confiantes</span><strong>{{ category_totals.confident }}</strong></div>
+    <div class="data-row"><span>Pedem RAG</span><strong>{{ category_totals.needs_rag }}</strong></div>
+  </div>
+  <div class="category-list">
+    {% for category in categories %}
+      <div class="category-row">
+        <div>
+          <strong>{{ category.category }}</strong>
+          <span>{{ category.item_count }} itens | {{ category.confidence_display }} confiança</span>
+        </div>
+        <small>{{ category.needs_rag }} pedem RAG</small>
+      </div>
+    {% empty %}
+      <div class="empty-state">Sem categorias materializadas.</div>
+    {% endfor %}
+  </div>
+</article>

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import re
 
+from .candidate_index import meaningful_item_code
 from .models import ProcurementItem
+from .unit_normalization import broad_scope_requires_document, requires_structured_specification, unit_family
 
 
 GENERIC_TERMS = {
@@ -16,6 +18,8 @@ GENERIC_TERMS = {
     "UNIDADE",
 }
 
+STOPWORDS = {"A", "AS", "COM", "DA", "DE", "DO", "DOS", "E", "EM", "PARA", "POR"}
+
 
 def description_quality(item: ProcurementItem) -> dict[str, object]:
     if _is_procurement_scope(item):
@@ -24,7 +28,7 @@ def description_quality(item: ProcurementItem) -> dict[str, object]:
             "comparable": False,
             "reason": "registro descreve o objeto da contratacao, nao um item/SKU com unidade comparavel",
         }
-    tokens = set(re.findall(r"[A-Z0-9]{2,}", item.item_description.upper()))
+    tokens = _tokens(item.item_description)
     generic_overlap = tokens & GENERIC_TERMS
     has_catalog = _has_catalog(item)
     has_complement = _has_complement(item)
@@ -45,6 +49,24 @@ def description_quality(item: ProcurementItem) -> dict[str, object]:
             "level": "weak",
             "comparable": has_catalog or has_complement,
             "reason": "descricao curta exige catalogo, complemento ou documento",
+        }
+    if broad_scope_requires_document(item) and not has_complement:
+        return {
+            "level": "broad_scope",
+            "comparable": False,
+            "reason": "escopo amplo exige termo de referencia/documento para comparacao de preco",
+        }
+    if requires_structured_specification(item) and not (has_catalog or has_complement):
+        return {
+            "level": "spec_required",
+            "comparable": False,
+            "reason": "familia de item exige catalogo, complemento ou atributos tecnicos para benchmark seguro",
+        }
+    if unit_family(item.unit) == "unknown":
+        return {
+            "level": "unit_unknown",
+            "comparable": False,
+            "reason": "unidade nao normalizada impede benchmark seguro",
         }
     return {
         "level": "usable",
@@ -70,6 +92,10 @@ def _is_procurement_scope(item: ProcurementItem) -> bool:
     return bool(item.source == "pncp" and scope_unit and has_notice_fields and not has_item_fields)
 
 
+def _tokens(text: str) -> set[str]:
+    return {token for token in re.findall(r"[A-Z0-9]{2,}", text.upper()) if token not in STOPWORDS}
+
+
 def _has_catalog(item: ProcurementItem) -> bool:
     payload = item.source_payload or {}
     detail = payload.get("pncpItemDetail") if isinstance(payload.get("pncpItemDetail"), dict) else {}
@@ -84,10 +110,13 @@ def _has_catalog(item: ProcurementItem) -> bool:
     blocked_codes = {
         str(item.source_record_id or ""),
         str(payload.get("idCompraItem") or ""),
+        str(payload.get("id_compra_item") or ""),
         str(payload.get("numeroItemPncp") or ""),
+        str(payload.get("numero_item_pncp") or ""),
+        str(payload.get("numero_item") or ""),
         str(detail.get("numeroItem") or ""),
     }
-    return bool(item.item_code and item.item_code not in blocked_codes)
+    return bool(meaningful_item_code(item) and item.item_code not in blocked_codes)
 
 
 def _has_complement(item: ProcurementItem) -> bool:

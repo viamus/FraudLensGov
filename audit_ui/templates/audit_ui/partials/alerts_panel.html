@@ -1,0 +1,25 @@
+<article class="panel">
+  <div class="panel-head">
+    <div class="head-title">
+      <svg><use href="#i-alert"></use></svg>
+      <div>
+        <p class="eyebrow">Alertas</p>
+        <h2>Fila estatística</h2>
+      </div>
+    </div>
+  </div>
+  <div class="alert-list">
+    {% for alert in visible_alerts %}
+      <a class="alert-row" href="/api/alerts/{{ alert.id }}">
+        <span class="severity">S{{ alert.severity }}</span>
+        <div>
+          <span class="risk-label">{{ alert.risk_label }}</span>
+          <strong>{{ alert.display_title }}</strong>
+          <small>{{ alert.total_value_display }} | score {{ alert.score_display }} | {{ alert.quality_level }}</small>
+        </div>
+      </a>
+    {% empty %}
+      <div class="empty-state">Sem alerta estatístico ativo.</div>
+    {% endfor %}
+  </div>
+</article>
