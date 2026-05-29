@@ -4,7 +4,7 @@ import html
 import json
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from .storage import Storage
 
@@ -33,6 +33,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/summary":
             self._send_json(self.app_storage.dashboard_summary())
+            return
+        if path.startswith("/api/clusters/"):
+            cluster_id = unquote(path.removeprefix("/api/clusters/"))
+            detail = self.app_storage.cluster_detail(cluster_id)
+            if detail is None:
+                self.send_error(HTTPStatus.NOT_FOUND, "Cluster not found")
+                return
+            self._send_json(detail)
+            return
+        if path.startswith("/api/items/") and path.endswith("/neighbors"):
+            item_id = unquote(path.removeprefix("/api/items/").removesuffix("/neighbors"))
+            self._send_json({"item_id": item_id, "neighbors": self.app_storage.item_neighbors(item_id)})
+            return
+        if path.startswith("/api/alerts/"):
+            alert_id = unquote(path.removeprefix("/api/alerts/"))
+            detail = self.app_storage.alert_detail(alert_id)
+            if detail is None:
+                self.send_error(HTTPStatus.NOT_FOUND, "Alert not found")
+                return
+            self._send_json(detail)
             return
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
@@ -382,6 +402,13 @@ def render_dashboard(summary: dict[str, object]) -> str:
       font-weight: 900;
       text-transform: uppercase;
     }}
+    .action-link {{
+      color: var(--blue);
+      text-decoration: none;
+    }}
+    .action-link:hover {{
+      text-decoration: underline;
+    }}
     .cluster-meta,
     .run-meta {{
       display: block;
@@ -627,7 +654,7 @@ def _render_cluster(row: dict[str, object]) -> str:
     label = str(row.get("label") or "Cluster sem rotulo")
     return f"""
       <div class="cluster-item">
-        <span class="cluster-title">{escape(label)}</span>
+        <a class="cluster-title action-link" href="/api/clusters/{escape(row.get('id'))}">{escape(label)}</a>
         <span class="cluster-meta">
           {int(row.get("item_count") or 0)} itens | media {money(row.get("avg_unit_price"))}
           | faixa {money(row.get("min_unit_price"))} - {money(row.get("max_unit_price"))}
@@ -664,10 +691,10 @@ def _render_alert_row(row: dict[str, object]) -> str:
     <tr>
       <td><span class="{sev_class}">{severity}</span></td>
       <td>{float(row['score']):.2f}</td>
-      <td><span class="alert-title">{escape(row['title'])}</span><span class="muted">{escape(explanation)}</span></td>
+      <td><a class="alert-title action-link" href="/api/alerts/{escape(row['id'])}">{escape(row['title'])}</a><span class="muted">{escape(explanation)}</span></td>
       <td>{escape(row['item_description'])}<br><span class="muted">{escape(row['state'])}</span></td>
       <td>{escape(row['agency_name'])}</td>
-      <td>{escape(row['supplier_name'] or 'Nao informado')}</td>
+      <td>{escape(row['supplier_name'] or 'Nao informado')}<br><a class="action-link muted" href="/api/items/{escape(row['item_id'])}/neighbors">vizinhos</a></td>
       <td class="money">{money(row['total_value'])}</td>
       <td>{escape(row['procurement_date'])}</td>
     </tr>"""

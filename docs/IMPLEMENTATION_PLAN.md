@@ -255,6 +255,7 @@ Ao adicionar dependencias:
 - Enriquecer itens Compras.gov.br com descricao de item quando disponivel.
 - Criar tabela de execucoes de ingestao.
 - Materializar clusters KNN lexicais de itens comparaveis.
+- Persistir vizinhos KNN ranqueados por item para explicar agrupamentos.
 - Adicionar exportacao CSV/JSON/Markdown de alertas.
 - Criar testes de contrato para payloads de PNCP e Compras.gov.br.
 - Persistir vizinhos comparaveis usados em cada alerta.
@@ -320,6 +321,15 @@ Exportar alertas auditaveis:
 
 ```powershell
 python -m fraud_lens_gov export-alerts --format md --output reports/alerts.md --limit 25
+```
+
+Endpoints locais de investigacao:
+
+```text
+GET /api/summary
+GET /api/clusters/{cluster_id}
+GET /api/alerts/{alert_id}
+GET /api/items/{item_id}/neighbors
 ```
 
 Descobrir portais locais via Google:

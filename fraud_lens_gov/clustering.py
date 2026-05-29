@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections import Counter, defaultdict
 
-from .models import ItemCluster, ItemClusterMember, ProcurementItem
+from .models import ItemCluster, ItemClusterMember, ItemNeighbor, ProcurementItem
 from .normalization import stable_id
 
 
@@ -31,15 +31,33 @@ def build_item_clusters(
     k: int = 8,
     min_similarity: float = 0.42,
 ) -> tuple[list[ItemCluster], list[ItemClusterMember]]:
+    clusters, members, _ = build_cluster_index(items, k=k, min_similarity=min_similarity)
+    return clusters, members
+
+
+def build_cluster_index(
+    items: list[ProcurementItem],
+    k: int = 8,
+    min_similarity: float = 0.42,
+) -> tuple[list[ItemCluster], list[ItemClusterMember], list[ItemNeighbor]]:
     comparable = [item for item in items if _tokens(item.item_description)]
     neighbor_map = nearest_neighbors(comparable, k=k, min_similarity=min_similarity)
     graph: dict[str, set[str]] = {item.id: set() for item in comparable}
     by_id = {item.id: item for item in comparable}
+    neighbor_rows: list[ItemNeighbor] = []
 
     for item_id, neighbors in neighbor_map.items():
-        for neighbor_id, _ in neighbors:
+        for rank, (neighbor_id, similarity) in enumerate(neighbors, start=1):
             graph[item_id].add(neighbor_id)
             graph[neighbor_id].add(item_id)
+            neighbor_rows.append(
+                ItemNeighbor(
+                    item_id=item_id,
+                    neighbor_item_id=neighbor_id,
+                    similarity=round(similarity, 4),
+                    rank=rank,
+                )
+            )
 
     clusters: list[ItemCluster] = []
     members: list[ItemClusterMember] = []
@@ -77,6 +95,7 @@ def build_item_clusters(
     return (
         sorted(clusters, key=lambda row: (row.item_count, row.total_value), reverse=True),
         members,
+        neighbor_rows,
     )
 
 

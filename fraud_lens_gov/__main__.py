@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from .anomalies import analyze_items
-from .clustering import build_item_clusters
+from .clustering import build_cluster_index
 from .exporting import export_alerts
 from .genai import enrich_alerts_with_genai
 from .sample_data import SAMPLE_ITEMS
@@ -106,8 +106,8 @@ def _analyze(storage: Storage) -> int:
 
 
 def _build_clusters(storage: Storage, k: int = 8, min_similarity: float = 0.42) -> tuple[int, int]:
-    clusters, members = build_item_clusters(storage.list_items(), k=k, min_similarity=min_similarity)
-    storage.replace_item_clusters(clusters, members)
+    clusters, members, neighbors = build_cluster_index(storage.list_items(), k=k, min_similarity=min_similarity)
+    storage.replace_item_clusters(clusters, members, neighbors)
     return len(clusters), len(members)
 
 

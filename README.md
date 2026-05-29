@@ -63,6 +63,19 @@ Export an auditable alert package:
 python -m fraud_lens_gov export-alerts --format md --output reports/alerts.md --limit 25
 ```
 
+## Local Investigation API
+
+The dashboard also exposes JSON endpoints for audit workflows:
+
+```text
+GET /api/summary
+GET /api/clusters/{cluster_id}
+GET /api/alerts/{alert_id}
+GET /api/items/{item_id}/neighbors
+```
+
+Cluster and alert links are available directly in the dashboard.
+
 Google Programmable Search for local portal discovery:
 
 ```powershell

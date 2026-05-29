@@ -80,3 +80,11 @@ class ItemClusterMember:
     cluster_id: str
     item_id: str
     similarity: float
+
+
+@dataclass(frozen=True)
+class ItemNeighbor:
+    item_id: str
+    neighbor_item_id: str
+    similarity: float
+    rank: int

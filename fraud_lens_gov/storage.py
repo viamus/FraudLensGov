@@ -6,7 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Iterable
 
-from .models import Alert, IngestionRun, ItemCluster, ItemClusterMember, ProcurementItem, utc_now
+from .models import Alert, IngestionRun, ItemCluster, ItemClusterMember, ItemNeighbor, ProcurementItem, utc_now
 from .normalization import stable_id
 
 
@@ -101,6 +101,16 @@ class Storage:
                     PRIMARY KEY(cluster_id, item_id),
                     FOREIGN KEY(cluster_id) REFERENCES item_clusters(id) ON DELETE CASCADE,
                     FOREIGN KEY(item_id) REFERENCES procurement_items(id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS item_neighbors (
+                    item_id TEXT NOT NULL,
+                    neighbor_item_id TEXT NOT NULL,
+                    similarity REAL NOT NULL,
+                    rank INTEGER NOT NULL,
+                    PRIMARY KEY(item_id, neighbor_item_id),
+                    FOREIGN KEY(item_id) REFERENCES procurement_items(id) ON DELETE CASCADE,
+                    FOREIGN KEY(neighbor_item_id) REFERENCES procurement_items(id) ON DELETE CASCADE
                 );
                 """
             )
@@ -236,10 +246,13 @@ class Storage:
         self,
         clusters: Iterable[ItemCluster],
         members: Iterable[ItemClusterMember],
+        neighbors: Iterable[ItemNeighbor] | None = None,
     ) -> None:
         cluster_rows = list(clusters)
         member_rows = list(members)
+        neighbor_rows = list(neighbors or [])
         with self.connect() as conn:
+            conn.execute("DELETE FROM item_neighbors")
             conn.execute("DELETE FROM item_cluster_members")
             conn.execute("DELETE FROM item_clusters")
             conn.executemany(
@@ -262,6 +275,13 @@ class Storage:
                 """,
                 [asdict(member) for member in member_rows],
             )
+            conn.executemany(
+                """
+                INSERT INTO item_neighbors (item_id, neighbor_item_id, similarity, rank)
+                VALUES (:item_id, :neighbor_item_id, :similarity, :rank)
+                """,
+                [asdict(neighbor) for neighbor in neighbor_rows],
+            )
 
     def list_item_clusters(self, limit: int = 10) -> list[ItemCluster]:
         with self.connect() as conn:
@@ -274,6 +294,123 @@ class Storage:
                 (limit,),
             ).fetchall()
         return [self._row_to_cluster(row) for row in rows]
+
+    def cluster_detail(self, cluster_id: str) -> dict[str, object] | None:
+        with self.connect() as conn:
+            cluster = conn.execute("SELECT * FROM item_clusters WHERE id = ?", (cluster_id,)).fetchone()
+            if cluster is None:
+                return None
+            members = conn.execute(
+                """
+                SELECT
+                    m.similarity,
+                    i.id,
+                    i.source,
+                    i.source_record_id,
+                    i.procurement_id,
+                    i.item_description,
+                    i.unit,
+                    i.quantity,
+                    i.unit_price,
+                    i.total_value,
+                    i.currency,
+                    i.agency_name,
+                    i.supplier_name,
+                    i.supplier_id,
+                    i.state,
+                    i.procurement_date,
+                    i.portal_url
+                FROM item_cluster_members m
+                JOIN procurement_items i ON i.id = m.item_id
+                WHERE m.cluster_id = ?
+                ORDER BY i.unit_price DESC, i.total_value DESC
+                """,
+                (cluster_id,),
+            ).fetchall()
+        return {
+            "cluster": self._cluster_summary(cluster),
+            "members": [dict(row) for row in members],
+        }
+
+    def item_neighbors(self, item_id: str, limit: int = 10) -> list[dict[str, object]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    n.rank,
+                    n.similarity,
+                    i.id,
+                    i.source,
+                    i.source_record_id,
+                    i.procurement_id,
+                    i.item_description,
+                    i.unit,
+                    i.quantity,
+                    i.unit_price,
+                    i.total_value,
+                    i.currency,
+                    i.agency_name,
+                    i.supplier_name,
+                    i.supplier_id,
+                    i.state,
+                    i.procurement_date,
+                    i.portal_url
+                FROM item_neighbors n
+                JOIN procurement_items i ON i.id = n.neighbor_item_id
+                WHERE n.item_id = ?
+                ORDER BY n.rank ASC
+                LIMIT ?
+                """,
+                (item_id, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def alert_detail(self, alert_id: str) -> dict[str, object] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT
+                    a.id AS alert_id,
+                    a.risk_type,
+                    a.severity,
+                    a.score,
+                    a.title,
+                    a.explanation,
+                    a.genai_explanation,
+                    a.evidence,
+                    a.created_at,
+                    i.id AS item_id,
+                    i.source,
+                    i.source_record_id,
+                    i.procurement_id,
+                    i.item_code,
+                    i.item_description,
+                    i.unit,
+                    i.quantity,
+                    i.unit_price,
+                    i.total_value,
+                    i.currency,
+                    i.agency_name,
+                    i.agency_id,
+                    i.supplier_name,
+                    i.supplier_id,
+                    i.city,
+                    i.state,
+                    i.procurement_date,
+                    i.modality,
+                    i.portal_url
+                FROM analysis_alerts a
+                JOIN procurement_items i ON i.id = a.item_id
+                WHERE a.id = ?
+                """,
+                (alert_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            detail = dict(row)
+            detail["evidence"] = json.loads(str(detail["evidence"] or "{}"))
+            detail["neighbors"] = self.item_neighbors(str(detail["item_id"]), limit=8)
+            return detail
 
     def alert_export_rows(self, limit: int | None = None) -> list[dict[str, object]]:
         sql = """
@@ -364,7 +501,8 @@ class Storage:
                 """
                 SELECT
                     COUNT(*) AS clusters,
-                    COALESCE(SUM(item_count), 0) AS clustered_items
+                    COALESCE(SUM(item_count), 0) AS clustered_items,
+                    (SELECT COUNT(*) FROM item_neighbors) AS neighbor_edges
                 FROM item_clusters
                 """
             ).fetchone()
