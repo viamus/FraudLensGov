@@ -254,7 +254,8 @@ Ao adicionar dependencias:
 - Melhorar paginacao e checkpoints por fonte.
 - Enriquecer itens Compras.gov.br com descricao de item quando disponivel.
 - Criar tabela de execucoes de ingestao.
-- Adicionar exportacao CSV/JSON de alertas.
+- Materializar clusters KNN lexicais de itens comparaveis.
+- Adicionar exportacao CSV/JSON/Markdown de alertas.
 - Criar testes de contrato para payloads de PNCP e Compras.gov.br.
 - Persistir vizinhos comparaveis usados em cada alerta.
 
@@ -293,20 +294,32 @@ Ao adicionar dependencias:
 Carregar dados de exemplo, analisar e abrir dashboard:
 
 ```powershell
-python -m fraud_lens_gov ingest-sample --analyze
+python -m fraud_lens_gov ingest-sample --analyze --cluster
 python -m fraud_lens_gov serve
 ```
 
 Ingerir PNCP:
 
 ```powershell
-python -m fraud_lens_gov ingest-pncp --start 20240501 --end 20240502 --modality 6 --analyze
+python -m fraud_lens_gov ingest-pncp --start 20240501 --end 20240502 --modality 6 --page-size 10 --max-pages 2 --analyze --cluster
 ```
 
 Ingerir Compras.gov.br:
 
 ```powershell
-python -m fraud_lens_gov ingest-compras --start 2025-09-01 --end 2025-09-02 --analyze
+python -m fraud_lens_gov ingest-compras --start 2025-09-01 --end 2025-09-02 --page-size 10 --max-pages 1 --analyze --cluster
+```
+
+Reconstruir clusters:
+
+```powershell
+python -m fraud_lens_gov build-clusters --k 8 --min-similarity 0.42
+```
+
+Exportar alertas auditaveis:
+
+```powershell
+python -m fraud_lens_gov export-alerts --format md --output reports/alerts.md --limit 25
 ```
 
 Descobrir portais locais via Google:

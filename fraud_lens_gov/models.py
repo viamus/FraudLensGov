@@ -47,3 +47,36 @@ class Alert:
     evidence: dict[str, Any]
     genai_explanation: str = ""
     created_at: str = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
+class IngestionRun:
+    id: str
+    source: str
+    status: str
+    parameters: dict[str, Any]
+    records_read: int = 0
+    records_written: int = 0
+    error: str = ""
+    started_at: str = field(default_factory=utc_now)
+    finished_at: str = ""
+
+
+@dataclass(frozen=True)
+class ItemCluster:
+    id: str
+    label: str
+    item_count: int
+    avg_unit_price: float
+    min_unit_price: float
+    max_unit_price: float
+    total_value: float
+    states: list[str]
+    created_at: str = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
+class ItemClusterMember:
+    cluster_id: str
+    item_id: str
+    similarity: float

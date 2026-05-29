@@ -27,6 +27,7 @@ dist/
 data/
 *.sqlite
 *.sqlite3
+reports/
 
 # Editors and OS
 .idea/

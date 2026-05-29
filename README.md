@@ -12,6 +12,7 @@ The current prototype uses only the Python standard library:
 - Optional Google Programmable Search discovery for local procurement portals.
 - Local SQLite storage for development.
 - Statistical anomaly detection with an initial nearest-neighbor comparable-price strategy.
+- KNN-style lexical clusters persisted locally for comparable item review.
 - Optional OpenAI Responses API explanations.
 - Local dashboard served from Python.
 
@@ -20,7 +21,7 @@ The current prototype uses only the Python standard library:
 Requires Python 3.11+.
 
 ```powershell
-python -m fraud_lens_gov ingest-sample --analyze
+python -m fraud_lens_gov ingest-sample --analyze --cluster
 python -m fraud_lens_gov serve
 ```
 
@@ -41,13 +42,25 @@ python -m fraud_lens_gov serve --bootstrap-sample
 PNCP:
 
 ```powershell
-python -m fraud_lens_gov ingest-pncp --start 20240501 --end 20240502 --modality 6 --analyze
+python -m fraud_lens_gov ingest-pncp --start 20240501 --end 20240502 --modality 6 --page-size 10 --max-pages 2 --analyze --cluster
 ```
 
 Compras.gov.br:
 
 ```powershell
-python -m fraud_lens_gov ingest-compras --start 2025-09-01 --end 2025-09-02 --analyze
+python -m fraud_lens_gov ingest-compras --start 2025-09-01 --end 2025-09-02 --page-size 10 --max-pages 1 --analyze --cluster
+```
+
+Build clusters again after any manual data change:
+
+```powershell
+python -m fraud_lens_gov build-clusters --k 8 --min-similarity 0.42
+```
+
+Export an auditable alert package:
+
+```powershell
+python -m fraud_lens_gov export-alerts --format md --output reports/alerts.md --limit 25
 ```
 
 Google Programmable Search for local portal discovery:

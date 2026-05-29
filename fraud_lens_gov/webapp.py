@@ -61,9 +61,14 @@ def render_dashboard(summary: dict[str, object]) -> str:
     alerts = summary["alerts"]
     risk_types = summary["risk_types"]
     top_alerts = summary["top_alerts"]
+    cluster_totals = summary.get("cluster_totals", {"clusters": 0, "clustered_items": 0})
+    top_clusters = summary.get("top_clusters", [])
+    ingestion_runs = summary.get("ingestion_runs", [])
     posture = _risk_posture(alerts)
     risk_rows = "".join(_render_risk_type(row) for row in risk_types)
     alert_rows = "".join(_render_alert_row(row) for row in top_alerts)
+    cluster_rows = "".join(_render_cluster(row) for row in top_clusters)
+    run_rows = "".join(_render_ingestion_run(row) for row in ingestion_runs)
     return f"""<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -213,7 +218,7 @@ def render_dashboard(summary: dict[str, object]) -> str:
     }}
     .metrics {{
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 12px;
       margin-top: 22px;
     }}
@@ -291,6 +296,9 @@ def render_dashboard(summary: dict[str, object]) -> str:
       gap: 18px;
       margin-top: 18px;
     }}
+    .section-wide {{
+      grid-column: 1 / -1;
+    }}
     section {{
       background: var(--surface);
       border: 1px solid var(--line);
@@ -328,7 +336,7 @@ def render_dashboard(summary: dict[str, object]) -> str:
       gap: 10px;
       align-items: center;
       padding: 12px;
-      border-left: 4px solid var(--gold);
+      border-left: 4px solid var(--yellow);
       background: #fffdf2;
     }}
     .risk-item strong {{
@@ -344,6 +352,57 @@ def render_dashboard(summary: dict[str, object]) -> str:
       font-weight: 900;
       color: var(--blue);
     }}
+    .cluster-list,
+    .run-list {{
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }}
+    .cluster-item,
+    .run-item {{
+      padding: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }}
+    .cluster-item {{
+      border-left: 4px solid var(--blue);
+    }}
+    .run-item {{
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: start;
+      border-left: 4px solid var(--green);
+    }}
+    .cluster-title,
+    .run-title {{
+      display: block;
+      color: var(--blue-dark);
+      font-size: 13px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }}
+    .cluster-meta,
+    .run-meta {{
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      margin-top: 4px;
+    }}
+    .status-ok,
+    .status-running,
+    .status-failed {{
+      display: inline-block;
+      padding: 4px 7px;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }}
+    .status-ok {{ background: var(--green); }}
+    .status-running {{ background: var(--blue); }}
+    .status-failed {{ background: var(--red); }}
     .table-wrap {{
       display: block;
       overflow-x: auto;
@@ -471,6 +530,7 @@ def render_dashboard(summary: dict[str, object]) -> str:
           <div class="metric"><span>Itens analisados</span><strong>{totals["items"]}</strong></div>
           <div class="metric"><span>Valor observado</span><strong>{money(totals["total_value"])}</strong></div>
           <div class="metric"><span>Fornecedores</span><strong>{totals["suppliers"]}</strong></div>
+          <div class="metric"><span>Clusters</span><strong>{cluster_totals["clusters"]}</strong></div>
           <div class="metric"><span>Alertas ativos</span><strong>{alerts["alerts"]}</strong></div>
         </div>
       </section>
@@ -500,6 +560,26 @@ def render_dashboard(summary: dict[str, object]) -> str:
       </section>
 
       <section>
+        <div class="section-head">
+          <h2>Clusters comparaveis</h2>
+          <span class="small-note">KNN lexical</span>
+        </div>
+        <div class="cluster-list">
+          {cluster_rows or '<div class="empty">Execute build-clusters para materializar agrupamentos.</div>'}
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>Ultimas ingestoes</h2>
+          <span class="small-note">Trilha operacional</span>
+        </div>
+        <div class="run-list">
+          {run_rows or '<div class="empty">Nenhuma ingestao registrada.</div>'}
+        </div>
+      </section>
+
+      <section class="section-wide">
         <div class="section-head">
           <h2>Fila de revisao</h2>
           <span class="small-note">Prioridade por severidade</span>
@@ -542,6 +622,40 @@ def _render_risk_type(row: dict[str, object]) -> str:
       </div>"""
 
 
+def _render_cluster(row: dict[str, object]) -> str:
+    states = _states(row.get("states"))
+    label = str(row.get("label") or "Cluster sem rotulo")
+    return f"""
+      <div class="cluster-item">
+        <span class="cluster-title">{escape(label)}</span>
+        <span class="cluster-meta">
+          {int(row.get("item_count") or 0)} itens | media {money(row.get("avg_unit_price"))}
+          | faixa {money(row.get("min_unit_price"))} - {money(row.get("max_unit_price"))}
+          | UF {escape(", ".join(states) or "N/A")}
+        </span>
+      </div>"""
+
+
+def _render_ingestion_run(row: dict[str, object]) -> str:
+    status = str(row.get("status") or "").lower()
+    status_class = {
+        "success": "status-ok",
+        "running": "status-running",
+        "failed": "status-failed",
+    }.get(status, "status-running")
+    return f"""
+      <div class="run-item">
+        <div>
+          <span class="run-title">{escape(row.get("source"))}</span>
+          <span class="run-meta">
+            {int(row.get("records_written") or 0)} gravados de {int(row.get("records_read") or 0)} lidos
+            | inicio {escape(row.get("started_at"))}
+          </span>
+        </div>
+        <span class="{status_class}">{escape(status or "n/a")}</span>
+      </div>"""
+
+
 def _render_alert_row(row: dict[str, object]) -> str:
     severity = int(row["severity"])
     sev_class = "severity high" if severity >= 3 else "severity"
@@ -562,6 +676,19 @@ def _render_alert_row(row: dict[str, object]) -> str:
 def money(value: object) -> str:
     amount = float(value or 0)
     return f"R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _states(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return [value] if value else []
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed]
+    return []
 
 
 def escape(value: object) -> str:

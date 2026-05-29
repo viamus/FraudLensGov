@@ -6,7 +6,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Iterable
 
-from .models import Alert, ProcurementItem
+from .models import Alert, IngestionRun, ItemCluster, ItemClusterMember, ProcurementItem, utc_now
+from .normalization import stable_id
 
 
 class Storage:
@@ -68,6 +69,39 @@ class Storage:
                     created_at TEXT NOT NULL,
                     FOREIGN KEY(item_id) REFERENCES procurement_items(id) ON DELETE CASCADE
                 );
+
+                CREATE TABLE IF NOT EXISTS ingestion_runs (
+                    id TEXT PRIMARY KEY,
+                    source TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    parameters TEXT NOT NULL,
+                    records_read INTEGER NOT NULL,
+                    records_written INTEGER NOT NULL,
+                    error TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    finished_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS item_clusters (
+                    id TEXT PRIMARY KEY,
+                    label TEXT NOT NULL,
+                    item_count INTEGER NOT NULL,
+                    avg_unit_price REAL NOT NULL,
+                    min_unit_price REAL NOT NULL,
+                    max_unit_price REAL NOT NULL,
+                    total_value REAL NOT NULL,
+                    states TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS item_cluster_members (
+                    cluster_id TEXT NOT NULL,
+                    item_id TEXT NOT NULL,
+                    similarity REAL NOT NULL,
+                    PRIMARY KEY(cluster_id, item_id),
+                    FOREIGN KEY(cluster_id) REFERENCES item_clusters(id) ON DELETE CASCADE,
+                    FOREIGN KEY(item_id) REFERENCES procurement_items(id) ON DELETE CASCADE
+                );
                 """
             )
 
@@ -109,6 +143,61 @@ class Storage:
         with self.connect() as conn:
             return int(conn.execute("SELECT COUNT(*) FROM procurement_items").fetchone()[0])
 
+    def start_ingestion_run(self, source: str, parameters: dict[str, object]) -> IngestionRun:
+        started_at = utc_now()
+        run = IngestionRun(
+            id=stable_id("ingestion", source, started_at, json.dumps(parameters, sort_keys=True)),
+            source=source,
+            status="running",
+            parameters=parameters,
+            started_at=started_at,
+        )
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO ingestion_runs (
+                    id, source, status, parameters, records_read, records_written,
+                    error, started_at, finished_at
+                )
+                VALUES (
+                    :id, :source, :status, :parameters, :records_read, :records_written,
+                    :error, :started_at, :finished_at
+                )
+                """,
+                self._ingestion_run_to_row(run),
+            )
+        return run
+
+    def finish_ingestion_run(
+        self,
+        run_id: str,
+        status: str,
+        records_read: int,
+        records_written: int,
+        error: str = "",
+    ) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE ingestion_runs
+                SET status = ?, records_read = ?, records_written = ?, error = ?, finished_at = ?
+                WHERE id = ?
+                """,
+                (status, records_read, records_written, error, utc_now(), run_id),
+            )
+
+    def list_ingestion_runs(self, limit: int = 10) -> list[IngestionRun]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM ingestion_runs
+                ORDER BY started_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [self._row_to_ingestion_run(row) for row in rows]
+
     def replace_alerts(self, alerts: Iterable[Alert]) -> None:
         rows = list(alerts)
         with self.connect() as conn:
@@ -142,6 +231,95 @@ class Storage:
                 "UPDATE analysis_alerts SET genai_explanation = ? WHERE id = ?",
                 [(alert.genai_explanation, alert.id) for alert in alerts],
             )
+
+    def replace_item_clusters(
+        self,
+        clusters: Iterable[ItemCluster],
+        members: Iterable[ItemClusterMember],
+    ) -> None:
+        cluster_rows = list(clusters)
+        member_rows = list(members)
+        with self.connect() as conn:
+            conn.execute("DELETE FROM item_cluster_members")
+            conn.execute("DELETE FROM item_clusters")
+            conn.executemany(
+                """
+                INSERT INTO item_clusters (
+                    id, label, item_count, avg_unit_price, min_unit_price,
+                    max_unit_price, total_value, states, created_at
+                )
+                VALUES (
+                    :id, :label, :item_count, :avg_unit_price, :min_unit_price,
+                    :max_unit_price, :total_value, :states, :created_at
+                )
+                """,
+                [self._cluster_to_row(cluster) for cluster in cluster_rows],
+            )
+            conn.executemany(
+                """
+                INSERT INTO item_cluster_members (cluster_id, item_id, similarity)
+                VALUES (:cluster_id, :item_id, :similarity)
+                """,
+                [asdict(member) for member in member_rows],
+            )
+
+    def list_item_clusters(self, limit: int = 10) -> list[ItemCluster]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM item_clusters
+                ORDER BY item_count DESC, total_value DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [self._row_to_cluster(row) for row in rows]
+
+    def alert_export_rows(self, limit: int | None = None) -> list[dict[str, object]]:
+        sql = """
+            SELECT
+                a.id AS alert_id,
+                a.risk_type,
+                a.severity,
+                a.score,
+                a.title,
+                a.explanation,
+                a.genai_explanation,
+                a.evidence,
+                a.created_at,
+                i.id AS item_id,
+                i.source,
+                i.source_record_id,
+                i.procurement_id,
+                i.item_code,
+                i.item_description,
+                i.unit,
+                i.quantity,
+                i.unit_price,
+                i.total_value,
+                i.currency,
+                i.agency_name,
+                i.agency_id,
+                i.supplier_name,
+                i.supplier_id,
+                i.city,
+                i.state,
+                i.procurement_date,
+                i.modality,
+                i.portal_url
+            FROM analysis_alerts a
+            JOIN procurement_items i ON i.id = a.item_id
+            ORDER BY a.severity DESC, a.score DESC, a.created_at DESC
+        """
+        params: tuple[int, ...] = ()
+        if limit is not None:
+            sql += " LIMIT ?"
+            params = (limit,)
+        with self.connect() as conn:
+            rows = [dict(row) for row in conn.execute(sql, params).fetchall()]
+        for row in rows:
+            row["evidence"] = json.loads(str(row["evidence"] or "{}"))
+        return rows
 
     def dashboard_summary(self) -> dict[str, object]:
         with self.connect() as conn:
@@ -182,11 +360,36 @@ class Storage:
                 LIMIT 25
                 """
             ).fetchall()
+            cluster_totals = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS clusters,
+                    COALESCE(SUM(item_count), 0) AS clustered_items
+                FROM item_clusters
+                """
+            ).fetchone()
+            top_clusters = conn.execute(
+                """
+                SELECT * FROM item_clusters
+                ORDER BY item_count DESC, total_value DESC
+                LIMIT 8
+                """
+            ).fetchall()
+            ingestion_runs = conn.execute(
+                """
+                SELECT * FROM ingestion_runs
+                ORDER BY started_at DESC
+                LIMIT 6
+                """
+            ).fetchall()
         return {
             "totals": dict(totals),
             "alerts": dict(alerts),
             "risk_types": [dict(row) for row in risk_types],
             "top_alerts": [dict(row) for row in top_alerts],
+            "cluster_totals": dict(cluster_totals),
+            "top_clusters": [self._cluster_summary(row) for row in top_clusters],
+            "ingestion_runs": [self._ingestion_run_summary(row) for row in ingestion_runs],
         }
 
     @staticmethod
@@ -212,3 +415,39 @@ class Storage:
         data = dict(row)
         data["evidence"] = json.loads(data["evidence"] or "{}")
         return Alert(**data)
+
+    @staticmethod
+    def _ingestion_run_to_row(run: IngestionRun) -> dict[str, object]:
+        row = asdict(run)
+        row["parameters"] = json.dumps(run.parameters, ensure_ascii=False, sort_keys=True)
+        return row
+
+    @staticmethod
+    def _row_to_ingestion_run(row: sqlite3.Row) -> IngestionRun:
+        data = dict(row)
+        data["parameters"] = json.loads(data["parameters"] or "{}")
+        return IngestionRun(**data)
+
+    @staticmethod
+    def _cluster_to_row(cluster: ItemCluster) -> dict[str, object]:
+        row = asdict(cluster)
+        row["states"] = json.dumps(cluster.states, ensure_ascii=False)
+        return row
+
+    @staticmethod
+    def _row_to_cluster(row: sqlite3.Row) -> ItemCluster:
+        data = dict(row)
+        data["states"] = json.loads(data["states"] or "[]")
+        return ItemCluster(**data)
+
+    @staticmethod
+    def _cluster_summary(row: sqlite3.Row) -> dict[str, object]:
+        data = dict(row)
+        data["states"] = json.loads(data["states"] or "[]")
+        return data
+
+    @staticmethod
+    def _ingestion_run_summary(row: sqlite3.Row) -> dict[str, object]:
+        data = dict(row)
+        data["parameters"] = json.loads(data["parameters"] or "{}")
+        return data
