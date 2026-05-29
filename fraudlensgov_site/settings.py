@@ -6,8 +6,13 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "fraudlensgov-local-dev-key")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "").strip()
+if not SECRET_KEY:
+    if not DEBUG:
+        raise RuntimeError("Set DJANGO_SECRET_KEY when DJANGO_DEBUG=0.")
+    # Local-only fallback for development and tests; never use this value in production.
+    SECRET_KEY = "fraudlensgov-local-dev-key"
 ALLOWED_HOSTS = ["127.0.0.1", "localhost", "testserver"]
 
 INSTALLED_APPS = [
