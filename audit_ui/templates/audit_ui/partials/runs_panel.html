@@ -32,15 +32,19 @@
       <div class="table-row table-head-row" role="row">
         <a class="sort-link{% if run_table.sort_links.source.active %} active{% endif %}" href="{{ run_table.sort_links.source.url }}">Fonte<span>{{ run_table.sort_links.source.direction }}</span></a>
         <a class="sort-link{% if run_table.sort_links.status.active %} active{% endif %}" href="{{ run_table.sort_links.status.url }}">Status<span>{{ run_table.sort_links.status.direction }}</span></a>
-        <a class="sort-link{% if run_table.sort_links.records_read.active %} active{% endif %}" href="{{ run_table.sort_links.records_read.url }}">Lidos<span>{{ run_table.sort_links.records_read.direction }}</span></a>
-        <a class="sort-link{% if run_table.sort_links.records_written.active %} active{% endif %}" href="{{ run_table.sort_links.records_written.url }}">Gravados<span>{{ run_table.sort_links.records_written.direction }}</span></a>
+        <a class="sort-link{% if run_table.sort_links.records_read.active %} active{% endif %}" href="{{ run_table.sort_links.records_read.url }}">Registros<span>{{ run_table.sort_links.records_read.direction }}</span></a>
+        <span>Parâmetros</span>
+        <a class="sort-link{% if run_table.sort_links.started_at.active %} active{% endif %}" href="{{ run_table.sort_links.started_at.url }}">Janela<span>{{ run_table.sort_links.started_at.direction }}</span></a>
+        <span>Erro</span>
       </div>
       {% for run in run_table.rows %}
         <div class="table-row" role="row">
           <strong>{{ run.source }}</strong>
           <span class="badge {{ run.status_tone }}">{{ run.status }}</span>
-          <span>{{ run.records_read }}</span>
-          <span>{{ run.records_written }}</span>
+          <span>{{ run.records_display }}</span>
+          <span>{{ run.parameters_display }}</span>
+          <span>{{ run.window_display }}</span>
+          <span>{{ run.error_display }}</span>
         </div>
       {% empty %}
         <div class="empty-state">Sem ingestões registradas.</div>

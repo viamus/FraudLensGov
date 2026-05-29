@@ -1,37 +1,37 @@
 :root {
   color-scheme: dark;
-  --md-sys-color-background: #101418;
-  --md-sys-color-on-background: #e3e3e8;
-  --md-sys-color-surface: #101418;
-  --md-sys-color-surface-dim: #101418;
-  --md-sys-color-surface-container-lowest: #0b0f13;
-  --md-sys-color-surface-container-low: #171b20;
-  --md-sys-color-surface-container: #1b1f25;
-  --md-sys-color-surface-container-high: #242930;
-  --md-sys-color-surface-container-highest: #2f343c;
-  --md-sys-color-on-surface: #e3e3e8;
-  --md-sys-color-on-surface-variant: #c4c7cf;
-  --md-sys-color-outline: #8e929b;
-  --md-sys-color-outline-variant: #42474f;
-  --md-sys-color-primary: #a7c7fa;
-  --md-sys-color-on-primary: #07315d;
-  --md-sys-color-primary-container: #24466f;
-  --md-sys-color-on-primary-container: #d8e8ff;
-  --md-sys-color-secondary: #c4c7d8;
-  --md-sys-color-on-secondary: #2d3142;
-  --md-sys-color-secondary-container: #434758;
-  --md-sys-color-on-secondary-container: #e0e2f6;
-  --md-sys-color-tertiary: #b9d4c2;
-  --md-sys-color-on-tertiary: #243629;
-  --md-sys-color-tertiary-container: #3a4d3f;
-  --md-sys-color-on-tertiary-container: #d5f0dc;
-  --md-sys-color-error: #ffb4ab;
-  --md-sys-color-on-error: #690005;
-  --md-sys-color-error-container: #93000a;
-  --md-sys-color-on-error-container: #ffdad6;
-  --md-sys-state-hover: rgba(227, 227, 232, .08);
-  --md-sys-state-focus: rgba(167, 199, 250, .16);
-  --md-sys-state-pressed: rgba(227, 227, 232, .12);
+  --md-sys-color-background: #111214;
+  --md-sys-color-on-background: #f2f2ef;
+  --md-sys-color-surface: #111214;
+  --md-sys-color-surface-dim: #111214;
+  --md-sys-color-surface-container-lowest: #0b0c0d;
+  --md-sys-color-surface-container-low: #151619;
+  --md-sys-color-surface-container: #1b1d21;
+  --md-sys-color-surface-container-high: #23262b;
+  --md-sys-color-surface-container-highest: #2c3036;
+  --md-sys-color-on-surface: #f2f2ef;
+  --md-sys-color-on-surface-variant: #c8c9c5;
+  --md-sys-color-outline: #93979d;
+  --md-sys-color-outline-variant: #3f444a;
+  --md-sys-color-primary: #8eb8dc;
+  --md-sys-color-on-primary: #0b2438;
+  --md-sys-color-primary-container: #1d405f;
+  --md-sys-color-on-primary-container: #e5f1fb;
+  --md-sys-color-secondary: #b8c7be;
+  --md-sys-color-on-secondary: #1f2c25;
+  --md-sys-color-secondary-container: #314239;
+  --md-sys-color-on-secondary-container: #e3efe8;
+  --md-sys-color-tertiary: #d8c48f;
+  --md-sys-color-on-tertiary: #332a11;
+  --md-sys-color-tertiary-container: #4a3e1d;
+  --md-sys-color-on-tertiary-container: #f6e9bf;
+  --md-sys-color-error: #ef8f86;
+  --md-sys-color-on-error: #3f0500;
+  --md-sys-color-error-container: #7f1f18;
+  --md-sys-color-on-error-container: #ffe2de;
+  --md-sys-state-hover: rgba(242, 242, 239, .07);
+  --md-sys-state-focus: rgba(255, 221, 0, .22);
+  --md-sys-state-pressed: rgba(242, 242, 239, .11);
   --md-sys-elevation-level1: 0 1px 2px rgba(0, 0, 0, .38), 0 0 0 1px rgba(255, 255, 255, .03);
   --md-sys-elevation-level2: 0 4px 12px rgba(0, 0, 0, .34), 0 0 0 1px rgba(255, 255, 255, .035);
   --md-sys-elevation-level3: 0 12px 30px rgba(0, 0, 0, .34), 0 0 0 1px rgba(255, 255, 255, .04);
@@ -48,12 +48,12 @@
   --md-sys-type-label-large: 14px;
   --md-sys-type-label-medium: 12px;
   --md-sys-type-label-small: 11px;
-  --flg-success: #9ad6a2;
-  --flg-warning: #e6c875;
-  --flg-danger: #ffb4ab;
-  --flg-success-container: rgba(154, 214, 162, .13);
-  --flg-warning-container: rgba(230, 200, 117, .14);
-  --flg-danger-container: rgba(255, 180, 171, .13);
+  --flg-success: #8bc7a2;
+  --flg-warning: #f2cf63;
+  --flg-danger: #ef8f86;
+  --flg-success-container: rgba(139, 199, 162, .12);
+  --flg-warning-container: rgba(242, 207, 99, .13);
+  --flg-danger-container: rgba(239, 143, 134, .13);
   --bg: var(--md-sys-color-background);
   --shell: var(--md-sys-color-surface-container-low);
   --surface: var(--md-sys-color-surface-container);
@@ -61,11 +61,12 @@
   --surface-3: var(--md-sys-color-surface-container-highest);
   --ink: var(--md-sys-color-on-surface);
   --muted: var(--md-sys-color-on-surface-variant);
-  --soft: #9097a2;
+  --soft: #969b9f;
   --line: var(--md-sys-color-outline-variant);
   --line-strong: rgba(142, 146, 155, .62);
   --accent: var(--md-sys-color-primary);
   --accent-2: var(--md-sys-color-tertiary);
+  --focus: #ffdd00;
   --success: var(--flg-success);
   --warning: var(--flg-warning);
   --danger: var(--flg-danger);
@@ -197,6 +198,15 @@ svg {
   gap: 4px;
 }
 
+.menu-section-label {
+  margin: 12px 10px 2px;
+  color: var(--soft);
+  font-size: var(--md-sys-type-label-small);
+  font-weight: 760;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
 .menu-item {
   min-height: 44px;
   padding: 10px 12px;
@@ -232,7 +242,7 @@ svg {
 .icon-button:focus-visible,
 .table-controls input:focus-visible,
 .table-controls select:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -263,13 +273,15 @@ svg {
 
 .sidebar-collapsed .brand-copy,
 .sidebar-collapsed .menu-item span,
+.sidebar-collapsed .menu-section-label,
 .sidebar-collapsed .sidebar-foot {
   opacity: 0;
   pointer-events: none;
 }
 
 .sidebar-collapsed .brand-copy,
-.sidebar-collapsed .menu-item span {
+.sidebar-collapsed .menu-item span,
+.sidebar-collapsed .menu-section-label {
   display: none;
   width: 0;
   max-width: 0;
@@ -1033,8 +1045,18 @@ svg {
   grid-template-columns: minmax(220px, 1fr) 70px 110px minmax(180px, 1fr) minmax(120px, .7fr) 70px;
 }
 
+.runs-table {
+  min-width: 1080px;
+}
+
 .runs-table .table-row {
-  grid-template-columns: minmax(140px, 1fr) 96px 90px 90px;
+  grid-template-columns:
+    minmax(130px, .75fr)
+    96px
+    minmax(110px, .55fr)
+    minmax(240px, 1.25fr)
+    minmax(180px, .9fr)
+    minmax(180px, 1fr);
 }
 
 .comparison-table .table-row {

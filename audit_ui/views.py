@@ -23,8 +23,16 @@ def pipeline_page(request):
     return _render_dashboard(request, "pipeline")
 
 
+def quality_page(request):
+    return _render_dashboard(request, "qualidade")
+
+
 def investigation_page(request):
     return _render_dashboard(request, "investigacao")
+
+
+def neighbors_page(request):
+    return _render_dashboard(request, "vizinhos")
 
 
 def alert_detail_page(request, alert_id: str):
@@ -40,8 +48,16 @@ def normalization_page(request):
     return _render_dashboard(request, "normalizacao")
 
 
+def clusters_page(request):
+    return _render_dashboard(request, "clusters")
+
+
 def operation_page(request):
     return _render_dashboard(request, "operacao")
+
+
+def ingestion_page(request):
+    return _render_dashboard(request, "ingestoes")
 
 
 def _render_dashboard(request, active_page: str):
@@ -149,6 +165,7 @@ def _export_table(storage: Storage, query: Any, table_key: str) -> dict[str, Any
             {"key": "status", "label": "Status"},
             {"key": "records_read", "label": "Lidos"},
             {"key": "records_written", "label": "Gravados"},
+            {"key": "parameters_display", "label": "Parametros"},
             {"key": "started_at", "label": "Inicio"},
             {"key": "finished_at", "label": "Fim"},
             {"key": "error", "label": "Erro"},
@@ -560,19 +577,35 @@ def _page_copy(active_page: str) -> dict[str, str]:
         },
         "pipeline": {
             "title": "Pipeline de dados",
-            "subtitle": "Camadas Bronze, Silver e Golden com progresso observ\u00e1vel.",
+            "subtitle": "Camadas de maturidade do dado.",
+        },
+        "qualidade": {
+            "title": "Qualidade Golden",
+            "subtitle": "Bloqueios que impedem benchmark confi\u00e1vel.",
         },
         "investigacao": {
-            "title": "Investiga\u00e7\u00e3o",
-            "subtitle": "Alertas estat\u00edsticos e pares KNN que precisam de revis\u00e3o humana.",
+            "title": "Alertas",
+            "subtitle": "Casos priorizados para revis\u00e3o humana.",
+        },
+        "vizinhos": {
+            "title": "Vizinhos sem\u00e2nticos",
+            "subtitle": "Pares compar\u00e1veis usados pelo KNN.",
         },
         "normalizacao": {
-            "title": "Normaliza\u00e7\u00e3o e categorias",
-            "subtitle": "Categorias candidatas, clusters e fila futura para RAG.",
+            "title": "Categorias",
+            "subtitle": "Nomes can\u00f4nicos e necessidade de RAG.",
+        },
+        "clusters": {
+            "title": "Clusters",
+            "subtitle": "Grupos compar\u00e1veis por item, unidade e pre\u00e7o.",
         },
         "operacao": {
-            "title": "Opera\u00e7\u00e3o",
-            "subtitle": "Jobs, ingest\u00f5es recentes e sa\u00fade do processamento local.",
+            "title": "Jobs",
+            "subtitle": "Processos ass\u00edncronos e progresso.",
+        },
+        "ingestoes": {
+            "title": "Ingest\u00f5es",
+            "subtitle": "Coletas executadas por fonte p\u00fablica.",
         },
     }
     return pages.get(active_page, pages["overview"])
@@ -591,10 +624,7 @@ def _page_guidance(
     blocked: int,
     silver_total: int,
 ) -> dict[str, Any]:
-    disclaimer = (
-        "Esses sinais priorizam triagem e auditoria. Eles n\u00e3o afirmam fraude sozinhos; "
-        "o caso precisa de documento, contexto do edital e revis\u00e3o humana."
-    )
+    disclaimer = "Triagem, n\u00e3o acusa\u00e7\u00e3o. Confirme com edital, termo e revis\u00e3o humana."
     pages = {
         "overview": {
             "label": "Leitura executiva",
@@ -623,11 +653,8 @@ def _page_guidance(
         },
         "pipeline": {
             "label": "Trilha do dado",
-            "question": "De onde o dado veio e em que camada est\u00e1?",
-            "plain": (
-                "Aqui a plataforma mostra a passagem do dado bruto para um dado audit\u00e1vel: "
-                "coleta, normaliza\u00e7\u00e3o e prepara\u00e7\u00e3o para compara\u00e7\u00e3o."
-            ),
+            "question": "Em que camada o dado est\u00e1?",
+            "plain": "Bronze coleta, Silver normaliza e Golden decide se o item pode ser comparado.",
             "facts": [
                 {"label": "Silver", "value": silver_total},
                 {"label": "Golden compar\u00e1vel", "value": comparable},
@@ -646,13 +673,32 @@ def _page_guidance(
             ],
             "limit": disclaimer,
         },
+        "qualidade": {
+            "label": "R\u00e9gua Golden",
+            "question": "Por que um item foi bloqueado?",
+            "plain": "Esta tela mostra os motivos que impedem benchmark confi\u00e1vel.",
+            "facts": [
+                {"label": "Bloqueios", "value": blocked},
+                {"label": "Compar\u00e1veis", "value": comparable},
+                {"label": "Silver", "value": silver_total},
+            ],
+            "read": [
+                "Gen\u00e9rico ou fraco precisa de cat\u00e1logo, complemento ou documento.",
+                "Unidade incerta impede normaliza\u00e7\u00e3o de pre\u00e7o.",
+                "Escopo amplo deve ser lido no edital antes de comparar.",
+            ],
+            "terms": [
+                {"term": "Bloqueio", "definition": "Registro fora do benchmark por baixa qualidade."},
+                {"term": "Golden", "definition": "Camada pronta para risco ou bloqueio justificado."},
+                {"term": "Unidade", "definition": "Medida usada para normalizar pre\u00e7o."},
+                {"term": "Escopo", "definition": "Objeto amplo que exige documento."},
+            ],
+            "limit": disclaimer,
+        },
         "investigacao": {
             "label": "Fila de revis\u00e3o",
-            "question": "Quais casos merecem revis\u00e3o humana primeiro?",
-            "plain": (
-                "Esta tela junta alertas estat\u00edsticos e pares KNN para explicar por que um pre\u00e7o, "
-                "fornecedor ou padr\u00e3o de compra ficou fora do esperado."
-            ),
+            "question": "Qual alerta revisar primeiro?",
+            "plain": "Alertas ordenam risco estat\u00edstico, valor e qualidade da compara\u00e7\u00e3o.",
             "facts": [
                 {"label": "Alertas", "value": alerts},
                 {"label": "Pares KNN", "value": pairs},
@@ -660,8 +706,8 @@ def _page_guidance(
             ],
             "read": [
                 "Severidade maior significa prioridade de leitura, n\u00e3o conclus\u00e3o autom\u00e1tica.",
-                "Diferen\u00e7a KNN compara itens parecidos, respeitando texto, unidade e pre\u00e7o normalizado.",
-                "A qualidade mostra se a descri\u00e7\u00e3o do item sustenta a compara\u00e7\u00e3o ou pede documento.",
+                "Qualidade indica se a descri\u00e7\u00e3o sustenta a compara\u00e7\u00e3o.",
+                "Abra o alerta para ver evid\u00eancias, vizinhos e narrativa audit\u00e1vel.",
             ],
             "terms": [
                 {"term": "Severidade", "definition": "Peso operacional para ordenar a revis\u00e3o."},
@@ -671,13 +717,32 @@ def _page_guidance(
             ],
             "limit": disclaimer,
         },
+        "vizinhos": {
+            "label": "KNN",
+            "question": "Quais pares distorcem pre\u00e7o?",
+            "plain": "Pares mostram itens semanticamente compat\u00edveis com maior diferen\u00e7a de pre\u00e7o.",
+            "facts": [
+                {"label": "Pares KNN", "value": pairs},
+                {"label": "Bloqueados", "value": blocked},
+                {"label": "Clusters", "value": clusters},
+            ],
+            "read": [
+                "Unidades incompat\u00edveis n\u00e3o entram no par.",
+                "Similaridade sem\u00e2ntica reduz falso vizinho por contexto gen\u00e9rico.",
+                "Diferen\u00e7a alta ainda exige especifica\u00e7\u00e3o e documento.",
+            ],
+            "terms": [
+                {"term": "Vizinho", "definition": "Item compat\u00edvel usado como compara\u00e7\u00e3o."},
+                {"term": "KNN", "definition": "Busca dos vizinhos mais pr\u00f3ximos."},
+                {"term": "Similaridade", "definition": "For\u00e7a do match sem\u00e2ntico."},
+                {"term": "Diferen\u00e7a", "definition": "Maior raz\u00e3o entre pre\u00e7os normalizados."},
+            ],
+            "limit": disclaimer,
+        },
         "normalizacao": {
             "label": "Vocabul\u00e1rio do item",
-            "question": "Os itens est\u00e3o compar\u00e1veis o bastante?",
-            "plain": (
-                "Esta tela mostra como descri\u00e7\u00f5es p\u00fablicas foram agrupadas em categorias e "
-                "clusters. O objetivo \u00e9 separar item realmente compar\u00e1vel de descri\u00e7\u00e3o gen\u00e9rica."
-            ),
+            "question": "Como o item foi categorizado?",
+            "plain": "Categorias organizam nomes can\u00f4nicos e marcam itens que pedem RAG.",
             "facts": [
                 {"label": "Categorias", "value": categories},
                 {"label": "Clusters", "value": clusters},
@@ -685,7 +750,7 @@ def _page_guidance(
             ],
             "read": [
                 "Categoria \u00e9 uma hip\u00f3tese de nome padronizado para descri\u00e7\u00f5es parecidas.",
-                "Cluster \u00e9 um grupo compar\u00e1vel; unidade e especifica\u00e7\u00e3o mudam o pre\u00e7o esperado.",
+                "Confian\u00e7a baixa pede documento ou metadado.",
                 "RAG sinaliza item que deve buscar edital, termo de refer\u00eancia ou metadado antes do risco.",
             ],
             "terms": [
@@ -696,13 +761,32 @@ def _page_guidance(
             ],
             "limit": disclaimer,
         },
+        "clusters": {
+            "label": "Grupos",
+            "question": "Quais itens formam um grupo compar\u00e1vel?",
+            "plain": "Clusters agrupam itens por identidade sem\u00e2ntica, unidade e faixa de pre\u00e7o.",
+            "facts": [
+                {"label": "Clusters", "value": clusters},
+                {"label": "Pares KNN", "value": pairs},
+                {"label": "Compar\u00e1veis", "value": comparable},
+            ],
+            "read": [
+                "Cada cluster deve representar uma fam\u00edlia compar\u00e1vel.",
+                "Faixa larga pode indicar especifica\u00e7\u00e3o ausente.",
+                "UFs mostram cobertura geogr\u00e1fica do grupo.",
+            ],
+            "terms": [
+                {"term": "Cluster", "definition": "Grupo de itens compar\u00e1veis."},
+                {"term": "Faixa", "definition": "Menor e maior pre\u00e7o normalizado."},
+                {"term": "UFs", "definition": "Estados presentes no grupo."},
+                {"term": "Item", "definition": "Registro normalizado da compra."},
+            ],
+            "limit": disclaimer,
+        },
         "operacao": {
             "label": "Sa\u00fade operacional",
-            "question": "O processamento est\u00e1 saud\u00e1vel?",
-            "plain": (
-                "Aqui ficam as execu\u00e7\u00f5es de ingest\u00e3o e jobs ass\u00edncronos. A tela ajuda a entender "
-                "o que rodou, quanto gravou e onde a fila parou."
-            ),
+            "question": "Qual job est\u00e1 rodando?",
+            "plain": "Jobs mostram etapa, status e progresso dos processos ass\u00edncronos.",
             "facts": [
                 {"label": "Jobs", "value": jobs},
                 {"label": "Ingest\u00f5es", "value": runs},
@@ -721,6 +805,28 @@ def _page_guidance(
             ],
             "limit": disclaimer,
         },
+        "ingestoes": {
+            "label": "Coletas",
+            "question": "O que foi coletado da fonte p\u00fablica?",
+            "plain": "Ingest\u00f5es mostram fonte, par\u00e2metros, volume lido, volume gravado e erro.",
+            "facts": [
+                {"label": "Ingest\u00f5es", "value": runs},
+                {"label": "Jobs", "value": jobs},
+                {"label": "Silver", "value": silver_total},
+            ],
+            "read": [
+                "Lidos maior que gravados pode indicar deduplica\u00e7\u00e3o ou filtro.",
+                "Erro preenchido exige reexecu\u00e7\u00e3o ou ajuste do conector.",
+                "Par\u00e2metros documentam janela, fonte e limite usado.",
+            ],
+            "terms": [
+                {"term": "Fonte", "definition": "Origem p\u00fablica da coleta."},
+                {"term": "Lidos", "definition": "Registros recebidos pela ingest\u00e3o."},
+                {"term": "Gravados", "definition": "Registros aceitos no banco local."},
+                {"term": "Par\u00e2metros", "definition": "Filtros usados na execu\u00e7\u00e3o."},
+            ],
+            "limit": disclaimer,
+        },
     }
     return pages.get(active_page, pages["overview"])
 
@@ -729,24 +835,32 @@ def _page_path(active_page: str) -> str:
     paths = {
         "overview": "/",
         "pipeline": "/pipeline",
+        "qualidade": "/pipeline/qualidade",
         "investigacao": "/investigacao",
+        "vizinhos": "/investigacao/vizinhos",
         "normalizacao": "/normalizacao",
+        "clusters": "/normalizacao/clusters",
         "operacao": "/operacao",
+        "ingestoes": "/operacao/ingestoes",
     }
     return paths.get(active_page, "/")
 
 
 def _nav_items(active_page: str) -> list[dict[str, str]]:
     items = [
-        ("overview", "Vis\u00e3o geral", "i-dashboard", "/"),
-        ("pipeline", "Pipeline", "i-layers", "/pipeline"),
-        ("investigacao", "Investiga\u00e7\u00e3o", "i-shield", "/investigacao"),
-        ("normalizacao", "Normaliza\u00e7\u00e3o", "i-tags", "/normalizacao"),
-        ("operacao", "Opera\u00e7\u00e3o", "i-database", "/operacao"),
+        ("Principal", "overview", "Vis\u00e3o geral", "i-dashboard", "/"),
+        ("Dados", "pipeline", "Pipeline", "i-layers", "/pipeline"),
+        ("Dados", "qualidade", "Qualidade", "i-database", "/pipeline/qualidade"),
+        ("Risco", "investigacao", "Alertas", "i-shield", "/investigacao"),
+        ("Risco", "vizinhos", "Vizinhos", "i-network", "/investigacao/vizinhos"),
+        ("Normaliza\u00e7\u00e3o", "normalizacao", "Categorias", "i-tags", "/normalizacao"),
+        ("Normaliza\u00e7\u00e3o", "clusters", "Clusters", "i-network", "/normalizacao/clusters"),
+        ("Opera\u00e7\u00e3o", "operacao", "Jobs", "i-layers", "/operacao"),
+        ("Opera\u00e7\u00e3o", "ingestoes", "Ingest\u00f5es", "i-database", "/operacao/ingestoes"),
     ]
     return [
-        {"key": key, "label": label, "icon": icon, "href": href, "active": key == active_page}
-        for key, label, icon, href in items
+        {"group": group, "key": key, "label": label, "icon": icon, "href": href, "active": key == active_page}
+        for group, key, label, icon, href in items
     ]
 
 
@@ -917,7 +1031,45 @@ def _display_item(value: Any) -> str:
 
 
 def _run_view(row: dict[str, Any]) -> dict[str, Any]:
-    return {**row, "status_tone": str(row.get("status") or "unknown").lower()}
+    started = str(row.get("started_at") or "").replace("T", " ")
+    finished = str(row.get("finished_at") or "").replace("T", " ")
+    return {
+        **row,
+        "status_tone": str(row.get("status") or "unknown").lower(),
+        "records_display": f"{_int(row.get('records_read'))} / {_int(row.get('records_written'))}",
+        "parameters_display": _compact_params(_dict(row.get("parameters"))),
+        "window_display": f"{started[:16]} -> {finished[:16] if finished else 'em aberto'}",
+        "error_display": str(row.get("error") or "sem erro"),
+    }
+
+
+def _compact_params(params: dict[str, Any]) -> str:
+    if not params:
+        return "sem parametros"
+    priority = [
+        "source",
+        "start",
+        "end",
+        "start_year",
+        "end_year",
+        "window_days",
+        "max_pages",
+        "limit",
+        "limit_per_year",
+        "analyze",
+        "cluster",
+        "categorize",
+    ]
+    parts = []
+    for key in priority:
+        value = params.get(key)
+        if value not in {"", None, False}:
+            parts.append(f"{key}={value}")
+    if not parts:
+        for key, value in sorted(params.items())[:4]:
+            if value not in {"", None, False}:
+                parts.append(f"{key}={value}")
+    return " | ".join(parts[:5]) or "sem parametros"
 
 
 def _quality_label(value: Any) -> str:

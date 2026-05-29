@@ -44,6 +44,9 @@
 
       <nav class="main-menu">
         {% for item in nav_items %}
+          {% ifchanged item.group %}
+            <span class="menu-section-label">{{ item.group }}</span>
+          {% endifchanged %}
           <a href="{{ item.href }}" class="menu-item{% if item.active %} active{% endif %}" title="{{ item.label }}">
             <svg><use href="#{{ item.icon }}"></use></svg>
             <span>{{ item.label }}</span>
@@ -96,39 +99,52 @@
               {% endfor %}
             </div>
           </section>
-          <section class="section two-column">
-            {% include "audit_ui/partials/alerts_panel.html" %}
-            {% include "audit_ui/partials/quality_panel.html" %}
-          </section>
         {% endif %}
 
         {% if active_page == "pipeline" %}
-          <section class="section two-column">
-            {% include "audit_ui/partials/pipeline_panel.html" %}
-            {% include "audit_ui/partials/quality_panel.html" %}
-          </section>
           <section class="section">
-            {% include "audit_ui/partials/jobs_panel.html" %}
+            {% include "audit_ui/partials/pipeline_panel.html" %}
+          </section>
+        {% endif %}
+
+        {% if active_page == "qualidade" %}
+          <section class="section">
+            {% include "audit_ui/partials/quality_panel.html" %}
           </section>
         {% endif %}
 
         {% if active_page == "investigacao" %}
-          <section class="section two-column">
+          <section class="section">
             {% include "audit_ui/partials/alerts_panel.html" %}
+          </section>
+        {% endif %}
+
+        {% if active_page == "vizinhos" %}
+          <section class="section">
             {% include "audit_ui/partials/knn_panel.html" %}
           </section>
         {% endif %}
 
         {% if active_page == "normalizacao" %}
-          <section class="section two-column">
+          <section class="section">
             {% include "audit_ui/partials/categories_panel.html" %}
+          </section>
+        {% endif %}
+
+        {% if active_page == "clusters" %}
+          <section class="section">
             {% include "audit_ui/partials/clusters_panel.html" %}
           </section>
         {% endif %}
 
         {% if active_page == "operacao" %}
-          <section class="section two-column">
+          <section class="section">
             {% include "audit_ui/partials/jobs_panel.html" %}
+          </section>
+        {% endif %}
+
+        {% if active_page == "ingestoes" %}
+          <section class="section">
             {% include "audit_ui/partials/runs_panel.html" %}
           </section>
         {% endif %}

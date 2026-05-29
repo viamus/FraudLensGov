@@ -37,28 +37,62 @@ def test_django_dashboard_renders_operational_sections(tmp_path: Path):
     assert response.status_code == 200
     html = response.content.decode("utf-8")
     assert "FraudLensGov" in html
-    assert "Compras públicas em revisão" in html
-    assert "Visão geral" in html
+    assert "Compras p\u00fablicas em revis\u00e3o" in html
+    assert "Vis\u00e3o geral" in html
 
 
 def test_django_dashboard_routes_are_separate_pages(tmp_path: Path):
     db_path = tmp_path / "fraudlens.sqlite"
     _seed_dashboard_db(db_path)
+    client = Client()
 
     with override_settings(FRAUDLENS_DB=str(db_path)):
-        pipeline = Client().get("/pipeline")
-        investigation = Client().get("/investigacao")
-        normalization = Client().get("/normalizacao")
-        operation = Client().get("/operacao")
+        pipeline = client.get("/pipeline")
+        quality = client.get("/pipeline/qualidade")
+        investigation = client.get("/investigacao")
+        neighbors = client.get("/investigacao/vizinhos")
+        normalization = client.get("/normalizacao")
+        clusters = client.get("/normalizacao/clusters")
+        operation = client.get("/operacao")
+        ingestion = client.get("/operacao/ingestoes")
 
     assert pipeline.status_code == 200
     assert "Bronze / Silver / Golden" in pipeline.content.decode("utf-8")
+    assert quality.status_code == 200
+    assert "Bloqueios Golden" in quality.content.decode("utf-8")
     assert investigation.status_code == 200
-    assert "Pares para revisão" in investigation.content.decode("utf-8")
+    assert "Fila estat\u00edstica" in investigation.content.decode("utf-8")
+    assert neighbors.status_code == 200
+    assert "Pares para revis\u00e3o" in neighbors.content.decode("utf-8")
     assert normalization.status_code == 200
     assert "Categorias candidatas" in normalization.content.decode("utf-8")
+    assert clusters.status_code == 200
+    assert "Itens compar\u00e1veis" in clusters.content.decode("utf-8")
     assert operation.status_code == 200
-    assert "Execuções recentes" in operation.content.decode("utf-8")
+    assert "Processamento" in operation.content.decode("utf-8")
+    assert ingestion.status_code == 200
+    assert "Execu\u00e7\u00f5es recentes" in ingestion.content.decode("utf-8")
+
+
+def test_django_dashboard_pages_keep_one_primary_table(tmp_path: Path):
+    db_path = tmp_path / "fraudlens.sqlite"
+    _seed_dashboard_db(db_path)
+    pages = [
+        "/investigacao",
+        "/investigacao/vizinhos",
+        "/normalizacao",
+        "/normalizacao/clusters",
+        "/operacao",
+        "/operacao/ingestoes",
+    ]
+
+    with override_settings(FRAUDLENS_DB=str(db_path)):
+        for path in pages:
+            response = Client().get(path)
+            html = response.content.decode("utf-8")
+
+            assert response.status_code == 200
+            assert html.count('class="data-table') == 1
 
 
 def test_django_knn_review_api_returns_pairs(tmp_path: Path):
@@ -85,19 +119,22 @@ def test_django_alert_detail_page_explains_outlier(tmp_path: Path):
 
     assert response.status_code == 200
     html = response.content.decode("utf-8")
-    assert "Vizinhos usados no cálculo" in html
-    assert "Leitura auditável" in html
-    assert "Preço normalizado" in html
+    assert "Vizinhos usados no c\u00e1lculo" in html
+    assert "Leitura audit\u00e1vel" in html
+    assert "Pre\u00e7o normalizado" in html
 
 
 def test_django_tables_render_filters_and_pagination(tmp_path: Path):
     db_path = tmp_path / "fraudlens.sqlite"
     _seed_dashboard_db(db_path)
+    client = Client()
 
     with override_settings(FRAUDLENS_DB=str(db_path)):
-        investigation = Client().get("/investigacao", {"alerts_q": "notebook", "alerts_risk_type": "price_outlier"})
-        normalization = Client().get("/normalizacao")
-        operation = Client().get("/operacao")
+        investigation = client.get("/investigacao", {"alerts_q": "notebook", "alerts_risk_type": "price_outlier"})
+        normalization = client.get("/normalizacao")
+        clusters = client.get("/normalizacao/clusters")
+        operation = client.get("/operacao")
+        ingestion = client.get("/operacao/ingestoes")
 
     assert investigation.status_code == 200
     investigation_html = investigation.content.decode("utf-8")
@@ -108,12 +145,21 @@ def test_django_tables_render_filters_and_pagination(tmp_path: Path):
     assert normalization.status_code == 200
     normalization_html = normalization.content.decode("utf-8")
     assert 'name="categories_q"' in normalization_html
-    assert 'name="clusters_q"' in normalization_html
+    assert 'name="clusters_q"' not in normalization_html
+
+    assert clusters.status_code == 200
+    clusters_html = clusters.content.decode("utf-8")
+    assert 'name="clusters_q"' in clusters_html
 
     assert operation.status_code == 200
     operation_html = operation.content.decode("utf-8")
     assert 'name="jobs_q"' in operation_html
-    assert 'name="runs_q"' in operation_html
+    assert 'name="runs_q"' not in operation_html
+
+    assert ingestion.status_code == 200
+    ingestion_html = ingestion.content.decode("utf-8")
+    assert 'name="runs_q"' in ingestion_html
+    assert "Par\u00e2metros" in ingestion_html
 
 
 def test_django_dashboard_guides_non_expert_reader(tmp_path: Path):
@@ -121,11 +167,11 @@ def test_django_dashboard_guides_non_expert_reader(tmp_path: Path):
     _seed_dashboard_db(db_path)
 
     with override_settings(FRAUDLENS_DB=str(db_path)):
-        response = Client().get("/normalizacao", {"clusters_page": "2", "categories_page": "2"})
+        response = Client().get("/normalizacao", {"categories_page": "2"})
 
     assert response.status_code == 200
     html = response.content.decode("utf-8")
-    assert "Os itens est\u00e3o compar\u00e1veis o bastante?" in html
+    assert "Como o item foi categorizado?" in html
     assert "Dicion\u00e1rio r\u00e1pido" in html
     assert "Contexto e termos" in html
     assert "Grupo de itens parecidos o suficiente" in html
