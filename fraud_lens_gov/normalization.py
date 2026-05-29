@@ -49,7 +49,7 @@ def from_pncp_notice(raw: dict[str, Any]) -> ProcurementItem:
         procurement_id=str(source_record_id),
         item_code=str(raw.get("numeroCompra") or source_record_id),
         item_description=normalize_text(description),
-        unit="CONTRATACAO",
+        unit="NAO APLICAVEL",
         quantity=quantity,
         unit_price=unit_price,
         total_value=total_value,

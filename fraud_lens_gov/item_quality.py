@@ -18,6 +18,12 @@ GENERIC_TERMS = {
 
 
 def description_quality(item: ProcurementItem) -> dict[str, object]:
+    if _is_procurement_scope(item):
+        return {
+            "level": "procurement_scope",
+            "comparable": False,
+            "reason": "registro descreve o objeto da contratacao, nao um item/SKU com unidade comparavel",
+        }
     tokens = set(re.findall(r"[A-Z0-9]{2,}", item.item_description.upper()))
     generic_overlap = tokens & GENERIC_TERMS
     has_catalog = _has_catalog(item)
@@ -49,6 +55,19 @@ def description_quality(item: ProcurementItem) -> dict[str, object]:
 
 def is_comparable(item: ProcurementItem) -> bool:
     return bool(description_quality(item)["comparable"])
+
+
+def _is_procurement_scope(item: ProcurementItem) -> bool:
+    payload = item.source_payload or {}
+    has_notice_fields = bool(payload.get("objetoCompra") or payload.get("numeroControlePNCP"))
+    has_item_fields = bool(
+        payload.get("numeroItemPncp")
+        or payload.get("numeroItem")
+        or payload.get("idCompraItem")
+        or payload.get("valorUnitarioHomologado")
+    )
+    scope_unit = item.unit in {"CONTRATACAO", "OBJETO", "NAO APLICAVEL"}
+    return bool(item.source == "pncp" and scope_unit and has_notice_fields and not has_item_fields)
 
 
 def _has_catalog(item: ProcurementItem) -> bool:

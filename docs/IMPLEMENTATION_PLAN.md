@@ -24,6 +24,7 @@ Uso primario: editais, avisos, atas, contratos e metadados publicados no Portal 
 Estrategia:
 
 - Comecar pela API publica de consulta de contratacoes por data de publicacao.
+- Tratar publicacoes/objetos de contratacao como `procurement_scope`, nao como item/SKU de preco unitario.
 - Persistir o payload bruto junto com o registro normalizado.
 - Tratar instabilidade da API com retry, rate limiting e janelas pequenas de data.
 - Futuramente, baixar documentos associados ao processo para leitura de edital e termo de referencia.
@@ -169,6 +170,7 @@ Abordagem inicial sem dependencias:
 - Tokenizar descricao normalizada do item.
 - Calcular similaridade textual simples entre itens.
 - Priorizar vizinhos do mesmo estado, unidade e codigo de catalogo quando existirem.
+- Excluir objetos de edital/contratacao sem item, unidade e quantidade reais de qualquer benchmark de preco.
 - Comparar preco unitario do item com a mediana dos K vizinhos mais proximos.
 - Guardar no alerta quais vizinhos formaram a base de comparacao.
 

@@ -30,6 +30,40 @@ def _item(description: str, price: float, suffix: str, payload: dict[str, object
     )
 
 
+def test_pncp_procurement_notice_scope_is_not_item_comparable():
+    item = ProcurementItem(
+        id=stable_id("quality", "pncp-notice"),
+        source="pncp",
+        source_record_id="12345678000190-1-000001/2026",
+        procurement_id="12345678000190-1-000001/2026",
+        item_code="1",
+        item_description="O OBJETO DA LICITACAO E O REGISTRO DE PRECO PARA SERVICOS EM HORAS ANO",
+        unit="CONTRATACAO",
+        quantity=1,
+        unit_price=23314359.54,
+        total_value=23314359.54,
+        currency="BRL",
+        agency_name="ORGAO",
+        agency_id="12345678000190",
+        supplier_name="",
+        supplier_id="",
+        city="",
+        state="CE",
+        procurement_date="2026-05-04",
+        modality="PREGAO",
+        source_payload={
+            "numeroControlePNCP": "12345678000190-1-000001/2026",
+            "objetoCompra": "O objeto da licitacao e o registro de preco para servicos em horas ano",
+            "valorTotalEstimado": 23314359.54,
+        },
+    )
+
+    quality = description_quality(item)
+
+    assert quality["level"] == "procurement_scope"
+    assert quality["comparable"] is False
+
+
 def test_generic_lab_equipment_description_is_not_comparable_without_catalog():
     item = _item("PECA EQUIPAMENTO LABORATORIO", 100, "1")
 

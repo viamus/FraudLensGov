@@ -165,6 +165,15 @@ class Storage:
                 );
                 """
             )
+            conn.execute(
+                """
+                UPDATE procurement_items
+                SET unit = 'NAO APLICAVEL'
+                WHERE source = 'pncp'
+                  AND unit = 'CONTRATACAO'
+                  AND source_payload LIKE '%objetoCompra%'
+                """
+            )
 
     def upsert_items(self, items: Iterable[ProcurementItem]) -> int:
         rows = list(items)
@@ -825,7 +834,8 @@ class Storage:
                     SUM(CASE WHEN quality_level = 'generic' THEN 1 ELSE 0 END) AS generic,
                     SUM(CASE WHEN quality_level = 'missing' THEN 1 ELSE 0 END) AS missing,
                     SUM(CASE WHEN quality_level = 'weak' THEN 1 ELSE 0 END) AS weak,
-                    SUM(CASE WHEN quality_level = 'usable' THEN 1 ELSE 0 END) AS usable
+                    SUM(CASE WHEN quality_level = 'usable' THEN 1 ELSE 0 END) AS usable,
+                    SUM(CASE WHEN quality_level = 'procurement_scope' THEN 1 ELSE 0 END) AS procurement_scope
                 FROM golden_items
                 """
             ).fetchone()

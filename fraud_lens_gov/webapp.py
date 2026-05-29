@@ -754,7 +754,7 @@ def _render_layers(layers: object) -> str:
     rows = [
         ("Bronze", bronze.get("total", 0), f"pendentes {bronze.get('pending', 0)} | silver {bronze.get('silvered', 0)} | falhas {bronze.get('failed', 0)}"),
         ("Silver", silver.get("total", 0), "itens normalizados em tabela operacional"),
-        ("Golden", golden.get("total", 0), f"comparaveis {golden.get('comparable', 0)} | genericos {golden.get('generic', 0)} | ausentes {golden.get('missing', 0)}"),
+        ("Golden", golden.get("total", 0), f"comparaveis {golden.get('comparable', 0)} | processos {golden.get('procurement_scope', 0)} | genericos {golden.get('generic', 0)} | ausentes {golden.get('missing', 0)}"),
     ]
     return "".join(
         f"""
