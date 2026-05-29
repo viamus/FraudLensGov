@@ -91,6 +91,8 @@ def build_parser() -> argparse.ArgumentParser:
     golden.add_argument("--cluster", action="store_true", help="Build item clusters after building Golden.")
     golden.add_argument("--k", type=int, default=8, help="Number of nearest neighbors per item.")
     golden.add_argument("--min-similarity", type=float, default=0.42, help="Minimum neighbor similarity.")
+    golden.add_argument("--limit", type=int, help="Maximum stale items to materialize in this run.")
+    golden.add_argument("--full-refresh", action="store_true", help="Rebuild every Golden row instead of only stale items.")
     golden.add_argument("--async", dest="run_async", action="store_true", help="Run in a background process.")
     golden.add_argument("--job-id", help=argparse.SUPPRESS)
 
@@ -274,6 +276,10 @@ def _build_silver_cli_args(args: argparse.Namespace) -> list[str]:
 
 def _build_golden_cli_args(args: argparse.Namespace) -> list[str]:
     result = ["--k", str(args.k), "--min-similarity", str(args.min_similarity)]
+    if args.limit is not None:
+        result.extend(["--limit", str(args.limit)])
+    if args.full_refresh:
+        result.append("--full-refresh")
     if args.analyze:
         result.append("--analyze")
     if args.cluster:
@@ -541,11 +547,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if command == "build-golden":
         steps_total = 1 + int(bool(args.analyze)) + int(bool(args.cluster))
+        stale_count = storage.count_items() if args.full_refresh else storage.count_stale_golden_items()
         params = {
             "analyze": args.analyze,
             "cluster": args.cluster,
+            "full_refresh": args.full_refresh,
+            "limit": args.limit,
             "k": args.k,
             "min_similarity": args.min_similarity,
+            "stale_items": stale_count,
         }
         if args.run_async and not args.job_id:
             job_id = storage.start_pipeline_job("Build Golden", "golden", params, steps_total)
@@ -556,23 +566,29 @@ def main(argv: list[str] | None = None) -> int:
         step_done = 0
         try:
             storage.update_pipeline_job(job_id, current_step="Golden materialization", steps_done=step_done, steps_total=steps_total)
-            golden_count = storage.replace_golden_items(storage.list_items())
+            if args.full_refresh:
+                golden_count = storage.replace_golden_items(storage.list_items())
+                materialization_mode = "full refresh"
+            else:
+                stale_items = storage.stale_golden_items(limit=args.limit)
+                golden_count = storage.upsert_golden_items(stale_items)
+                materialization_mode = "incremental"
             step_done += 1
             storage.update_pipeline_job(
                 job_id,
                 current_step="Golden materialization",
                 steps_done=step_done,
                 steps_total=steps_total,
-                message=f"{golden_count} Golden records built",
+                message=f"{golden_count} Golden records built ({materialization_mode})",
             )
-            print(f"Golden materialized: {golden_count} records.")
+            print(f"Golden materialized: {golden_count} records ({materialization_mode}).")
             if args.analyze:
-                storage.update_pipeline_job(job_id, current_step="Risk analysis", steps_done=step_done, steps_total=steps_total)
+                storage.update_pipeline_job(job_id, current_step="Global risk analysis", steps_done=step_done, steps_total=steps_total)
                 alert_count = _analyze(storage)
                 step_done += 1
                 storage.update_pipeline_job(
                     job_id,
-                    current_step="Risk analysis",
+                    current_step="Global risk analysis",
                     steps_done=step_done,
                     steps_total=steps_total,
                     message=f"{alert_count} alerts generated",

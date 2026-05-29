@@ -291,20 +291,7 @@ class Storage:
             )
 
     def replace_golden_items(self, items: Iterable[ProcurementItem]) -> int:
-        rows = []
-        built_at = utc_now()
-        for item in items:
-            quality = description_quality(item)
-            rows.append(
-                {
-                    "item_id": item.id,
-                    "quality_level": str(quality.get("level") or "unknown"),
-                    "comparable": 1 if quality.get("comparable") else 0,
-                    "quality_reason": str(quality.get("reason") or ""),
-                    "metadata": json.dumps(quality, ensure_ascii=False, sort_keys=True),
-                    "built_at": built_at,
-                }
-            )
+        rows = self._golden_rows(items)
         with self.connect() as conn:
             conn.execute("DELETE FROM golden_items")
             conn.executemany(
@@ -319,6 +306,56 @@ class Storage:
                 rows,
             )
         return len(rows)
+
+    def upsert_golden_items(self, items: Iterable[ProcurementItem]) -> int:
+        rows = self._golden_rows(items)
+        with self.connect() as conn:
+            conn.executemany(
+                """
+                INSERT INTO golden_items (
+                    item_id, quality_level, comparable, quality_reason, metadata, built_at
+                )
+                VALUES (
+                    :item_id, :quality_level, :comparable, :quality_reason, :metadata, :built_at
+                )
+                ON CONFLICT(item_id) DO UPDATE SET
+                    quality_level = excluded.quality_level,
+                    comparable = excluded.comparable,
+                    quality_reason = excluded.quality_reason,
+                    metadata = excluded.metadata,
+                    built_at = excluded.built_at
+                """,
+                rows,
+            )
+        return len(rows)
+
+    def stale_golden_items(self, limit: int | None = None) -> list[ProcurementItem]:
+        sql = """
+            SELECT p.*
+            FROM procurement_items p
+            LEFT JOIN golden_items g ON g.item_id = p.id
+            WHERE g.item_id IS NULL OR g.built_at < p.inserted_at
+            ORDER BY p.inserted_at ASC, p.procurement_date ASC
+        """
+        params: tuple[int, ...] = ()
+        if limit is not None:
+            sql += " LIMIT ?"
+            params = (limit,)
+        with self.connect() as conn:
+            return [self._row_to_item(row) for row in conn.execute(sql, params).fetchall()]
+
+    def count_stale_golden_items(self) -> int:
+        with self.connect() as conn:
+            return int(
+                conn.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM procurement_items p
+                    LEFT JOIN golden_items g ON g.item_id = p.id
+                    WHERE g.item_id IS NULL OR g.built_at < p.inserted_at
+                    """
+                ).fetchone()[0]
+            )
 
     def start_pipeline_job(
         self,
@@ -860,6 +897,24 @@ class Storage:
         row = asdict(item)
         row["source_payload"] = json.dumps(item.source_payload, ensure_ascii=False, sort_keys=True)
         return row
+
+    @staticmethod
+    def _golden_rows(items: Iterable[ProcurementItem]) -> list[dict[str, object]]:
+        rows = []
+        built_at = utc_now()
+        for item in items:
+            quality = description_quality(item)
+            rows.append(
+                {
+                    "item_id": item.id,
+                    "quality_level": str(quality.get("level") or "unknown"),
+                    "comparable": 1 if quality.get("comparable") else 0,
+                    "quality_reason": str(quality.get("reason") or ""),
+                    "metadata": json.dumps(quality, ensure_ascii=False, sort_keys=True),
+                    "built_at": built_at,
+                }
+            )
+        return rows
 
     @staticmethod
     def _row_to_item(row: sqlite3.Row) -> ProcurementItem:

@@ -78,3 +78,24 @@ def test_storage_tracks_layers_and_pipeline_jobs(tmp_path: Path):
     assert summary["layers"]["silver"]["total"] == len(SAMPLE_ITEMS)
     assert summary["layers"]["golden"]["total"] == len(SAMPLE_ITEMS)
     assert summary["pipeline_jobs"][0]["progress"] == 100.0
+
+
+def test_golden_materialization_can_process_only_stale_items(tmp_path: Path):
+    storage = Storage(tmp_path / "fraudlens.sqlite")
+    storage.init_schema()
+    storage.upsert_items(SAMPLE_ITEMS[:2])
+
+    assert storage.count_stale_golden_items() == 2
+    assert storage.upsert_golden_items(SAMPLE_ITEMS[:2]) == 2
+    assert storage.count_stale_golden_items() == 0
+
+    changed = replace(
+        SAMPLE_ITEMS[0],
+        item_description="NOTEBOOK CORPORATIVO 14 POLEGADAS 64GB RAM",
+        inserted_at="9999-01-01T00:00:00+00:00",
+    )
+    storage.upsert_items([changed])
+    stale = storage.stale_golden_items()
+
+    assert storage.count_stale_golden_items() == 1
+    assert [item.id for item in stale] == [changed.id]

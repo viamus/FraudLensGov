@@ -132,6 +132,8 @@ O prototipo atual mantem o core em Python puro para reduzir supply chain, mas os
 - `golden_items`: metadados de qualidade, comparabilidade e materializacao analitica.
 - `pipeline_jobs`: progresso observavel com percentual, etapa atual e erro.
 
+O processamento Golden deve ser incremental por padrao. Itens novos ou alterados no Silver sao rematerializados por comparacao entre `procurement_items.inserted_at` e `golden_items.built_at`. Reprocessamento completo deve ser uma operacao explicita (`--full-refresh`) para mudancas de regra, backfills corretivos ou auditoria.
+
 ### GraphQL
 
 GraphQL nao deve ser o primeiro passo. Ele pode ser util quando o dashboard tiver muitas visoes agregadas e consumidores externos precisarem compor consultas. Antes disso, REST simples e queries SQL controladas sao mais faceis de auditar.
@@ -331,6 +333,12 @@ Rodar o pipeline em camadas:
 python -m fraud_lens_gov backfill-bronze --source both --start 2016-05-29 --end 2026-05-29 --window-days 30 --max-pages 1 --async
 python -m fraud_lens_gov build-silver --source both --async
 python -m fraud_lens_gov build-golden --analyze --cluster --async
+```
+
+Reprocessar tudo apenas quando a regra de qualidade/comparabilidade mudar:
+
+```powershell
+python -m fraud_lens_gov build-golden --full-refresh --analyze --cluster
 ```
 
 Reconstruir clusters:

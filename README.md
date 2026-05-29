@@ -66,6 +66,8 @@ python -m fraud_lens_gov build-silver --source compras_gov
 python -m fraud_lens_gov build-golden --analyze --cluster
 ```
 
+`build-golden` is incremental by default: it only materializes items that are new or stale compared with the Golden layer. Use `--full-refresh` when changing quality/comparability rules and intentionally rebuilding the whole analytic layer.
+
 Run long Bronze/Silver/Golden jobs in the background and track progress in the dashboard:
 
 ```powershell
