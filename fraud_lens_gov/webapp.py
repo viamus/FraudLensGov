@@ -61,9 +61,8 @@ def render_dashboard(summary: dict[str, object]) -> str:
     alerts = summary["alerts"]
     risk_types = summary["risk_types"]
     top_alerts = summary["top_alerts"]
-    risk_rows = "".join(
-        f"<tr><td>{escape(row['risk_type'])}</td><td>{row['count']}</td></tr>" for row in risk_types
-    )
+    posture = _risk_posture(alerts)
+    risk_rows = "".join(_render_risk_type(row) for row in risk_types)
     alert_rows = "".join(_render_alert_row(row) for row in top_alerts)
     return f"""<!doctype html>
 <html lang="pt-BR">
@@ -74,149 +73,473 @@ def render_dashboard(summary: dict[str, object]) -> str:
   <style>
     :root {{
       color-scheme: light;
-      --bg: #f7f8fa;
-      --panel: #ffffff;
-      --ink: #18202a;
-      --muted: #667085;
-      --line: #d7dde5;
-      --accent: #0b766e;
-      --warn: #b54708;
-      --danger: #b42318;
+      --bg: #f8f8f8;
+      --surface: #ffffff;
+      --surface-2: #f3f5f7;
+      --ink: #1b1b1b;
+      --muted: #555d66;
+      --line: #dfe1e2;
+      --line-strong: #c7c9cc;
+      --blue: #1351b4;
+      --blue-dark: #071d41;
+      --blue-soft: #e8f1ff;
+      --green: #168821;
+      --yellow: #ffcd07;
+      --orange: #b57900;
+      --red: #e52207;
+      --shadow: 0 12px 30px rgba(7, 29, 65, .08);
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: var(--bg);
+      background:
+        linear-gradient(180deg, #ffffff 0, #f3f5f7 250px, #f8f8f8 100%);
       color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
     }}
-    header {{
+    .topbar {{
+      background: #ffffff;
+      color: var(--blue-dark);
       border-bottom: 1px solid var(--line);
-      background: var(--panel);
-      padding: 22px 28px;
+      box-shadow: 0 2px 12px rgba(7, 29, 65, .06);
     }}
-    main {{
-      max-width: 1180px;
+    .topbar-inner {{
+      max-width: 1320px;
       margin: 0 auto;
-      padding: 26px 22px 42px;
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }}
+    .brand {{
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }}
+    .seal {{
+      width: 46px;
+      height: 46px;
+      border: 2px solid var(--blue);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ffffff 0, var(--blue-soft) 100%);
+      color: var(--blue);
+      flex: 0 0 auto;
     }}
     h1 {{
       margin: 0;
-      font-size: 24px;
+      font-size: 22px;
+      line-height: 1.1;
       letter-spacing: 0;
     }}
-    .subtitle {{
-      margin: 8px 0 0;
+    .kicker {{
+      margin: 4px 0 0;
       color: var(--muted);
-      max-width: 900px;
-      line-height: 1.5;
+      font-size: 13px;
+    }}
+    .status-strip {{
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }}
+    .status-chip {{
+      border: 1px solid #c5d4eb;
+      background: var(--blue-soft);
+      color: var(--blue);
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }}
+    main {{
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 28px 24px 46px;
+    }}
+    .command-grid {{
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(300px, .8fr);
+      gap: 18px;
+      align-items: stretch;
+    }}
+    .hero-panel {{
+      background: var(--surface);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      border-top: 4px solid var(--blue);
+    }}
+    .hero-eyebrow {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }}
+    .section-label {{
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }}
+    .risk-badge {{
+      background: {posture["color"]};
+      color: #fff;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }}
+    .hero-title {{
+      margin: 0;
+      font-size: clamp(30px, 4vw, 52px);
+      line-height: 1;
+      max-width: 850px;
+      letter-spacing: 0;
+      color: var(--blue-dark);
+    }}
+    .hero-copy {{
+      max-width: 850px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.55;
     }}
     .metrics {{
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 14px;
-      margin-bottom: 24px;
+      gap: 12px;
+      margin-top: 22px;
     }}
     .metric {{
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 16px;
+      border-top: 3px solid var(--blue);
+      background: var(--surface-2);
+      padding: 15px;
+      min-height: 102px;
     }}
     .metric span {{
       display: block;
       color: var(--muted);
-      font-size: 13px;
-      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      margin-bottom: 9px;
     }}
     .metric strong {{
-      font-size: 25px;
+      display: block;
+      font-size: 26px;
+      line-height: 1.1;
       letter-spacing: 0;
     }}
-    section {{
-      margin-top: 24px;
+    .side-panel {{
+      background: #ffffff;
+      color: var(--blue-dark);
+      border: 1px solid var(--line);
+      border-top: 4px solid var(--yellow);
+      box-shadow: var(--shadow);
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 100%;
     }}
-    h2 {{
-      font-size: 17px;
-      margin: 0 0 12px;
+    .side-panel h2 {{
+      margin: 0 0 14px;
+      font-size: 19px;
+      letter-spacing: 0;
+    }}
+    .chain {{
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }}
+    .chain-row {{
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 11px;
+      align-items: start;
+    }}
+    .chain-mark {{
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #c5d4eb;
+      color: var(--blue);
+      font-weight: 800;
+      background: var(--blue-soft);
+    }}
+    .chain-row strong {{
+      display: block;
+      font-size: 14px;
+    }}
+    .chain-row span {{
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }}
+    .content-grid {{
+      display: grid;
+      grid-template-columns: minmax(280px, .45fr) minmax(0, 1fr);
+      gap: 18px;
+      margin-top: 18px;
+    }}
+    section {{
+      background: var(--surface);
+      border: 1px solid var(--line);
+      box-shadow: 0 12px 28px rgba(17, 24, 39, .06);
+      min-width: 0;
+    }}
+    .section-head {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #f8fafc;
+    }}
+    .section-head h2 {{
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: 0;
+    }}
+    .small-note {{
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }}
+    .risk-list {{
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }}
+    .risk-item {{
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border-left: 4px solid var(--gold);
+      background: #fffdf2;
+    }}
+    .risk-item strong {{
+      display: block;
+      font-size: 13px;
+    }}
+    .risk-item span {{
+      color: var(--muted);
+      font-size: 12px;
+    }}
+    .risk-count {{
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--blue);
+    }}
+    .table-wrap {{
+      display: block;
+      overflow-x: auto;
+      max-width: 100%;
     }}
     table {{
       width: 100%;
+      min-width: 980px;
       border-collapse: collapse;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      overflow: hidden;
     }}
     th, td {{
       border-bottom: 1px solid var(--line);
-      padding: 11px 12px;
+      padding: 13px 14px;
       text-align: left;
       vertical-align: top;
       font-size: 14px;
     }}
     th {{
-      background: #edf1f5;
-      color: #344054;
+      background: #f0f4fa;
+      color: var(--blue-dark);
       font-size: 12px;
       text-transform: uppercase;
-      letter-spacing: .04em;
+      letter-spacing: .06em;
+      position: sticky;
+      top: 0;
+      z-index: 1;
     }}
-    tr:last-child td {{ border-bottom: 0; }}
+    tr:hover td {{
+      background: #f7faff;
+    }}
     .severity {{
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      display: inline-grid;
+      place-items: center;
       min-width: 34px;
-      height: 26px;
-      border-radius: 999px;
+      height: 30px;
       color: #fff;
-      background: var(--warn);
-      font-weight: 700;
+      background: #b57900;
+      font-weight: 900;
     }}
-    .severity.high {{ background: var(--danger); }}
-    .muted {{ color: var(--muted); }}
-    .money {{ white-space: nowrap; }}
-    @media (max-width: 800px) {{
-      .metrics {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-      table {{ display: block; overflow-x: auto; }}
+    .severity.high {{
+      background: var(--red);
+    }}
+    .alert-title {{
+      display: block;
+      max-width: 360px;
+      font-weight: 800;
+      color: var(--ink);
+    }}
+    .muted {{
+      color: var(--muted);
+      line-height: 1.45;
+    }}
+    .money {{
+      white-space: nowrap;
+      font-weight: 800;
+    }}
+    .empty {{
+      padding: 20px;
+      color: var(--muted);
+    }}
+    @media (max-width: 980px) {{
+      .command-grid,
+      .content-grid {{
+        grid-template-columns: 1fr;
+      }}
+      .metrics {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }}
+      .topbar-inner {{
+        align-items: flex-start;
+        flex-direction: column;
+      }}
+      .status-strip {{
+        justify-content: flex-start;
+      }}
+    }}
+    @media (max-width: 560px) {{
+      main {{
+        padding: 18px 14px 32px;
+      }}
+      .topbar-inner {{
+        padding: 16px 14px;
+      }}
+      .hero-panel,
+      .side-panel {{
+        padding: 18px;
+      }}
+      .metrics {{
+        grid-template-columns: 1fr;
+      }}
+      .hero-eyebrow {{
+        align-items: flex-start;
+        flex-direction: column;
+      }}
     }}
   </style>
 </head>
 <body>
-  <header>
-    <h1>FraudLensGov</h1>
-    <p class="subtitle">Triagem local de riscos em compras publicas: ingestao, normalizacao, sinais estatisticos, clusters e relatorios explicaveis para revisao humana.</p>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="seal">FG</div>
+        <div>
+          <h1>FraudLensGov</h1>
+          <p class="kicker">Sala de auditoria publica para contratacoes, precos e fornecedores</p>
+        </div>
+      </div>
+      <div class="status-strip">
+        <span class="status-chip">Fonte publica</span>
+        <span class="status-chip">Evidencia rastreavel</span>
+        <span class="status-chip">Revisao humana</span>
+      </div>
+    </div>
   </header>
   <main>
-    <div class="metrics">
-      <div class="metric"><span>Itens analisados</span><strong>{totals['items']}</strong></div>
-      <div class="metric"><span>Valor observado</span><strong>{money(totals['total_value'])}</strong></div>
-      <div class="metric"><span>Fornecedores</span><strong>{totals['suppliers']}</strong></div>
-      <div class="metric"><span>Alertas</span><strong>{alerts['alerts']}</strong></div>
+    <div class="command-grid">
+      <section class="hero-panel">
+        <div class="hero-eyebrow">
+          <span class="section-label">Painel de comando</span>
+          <span class="risk-badge">{posture["label"]}</span>
+        </div>
+        <h2 class="hero-title">Risco publico sob revisao, com trilha de evidencia.</h2>
+        <p class="hero-copy">A fila abaixo consolida compras, fornecedores, valores unitarios e sinais estatisticos para orientar auditoria, controle social e revisao documental.</p>
+        <div class="metrics">
+          <div class="metric"><span>Itens analisados</span><strong>{totals["items"]}</strong></div>
+          <div class="metric"><span>Valor observado</span><strong>{money(totals["total_value"])}</strong></div>
+          <div class="metric"><span>Fornecedores</span><strong>{totals["suppliers"]}</strong></div>
+          <div class="metric"><span>Alertas ativos</span><strong>{alerts["alerts"]}</strong></div>
+        </div>
+      </section>
+      <aside class="side-panel">
+        <div>
+          <span class="section-label">Cadeia de custodia</span>
+          <h2>Da fonte publica ao parecer auditavel</h2>
+          <div class="chain">
+            <div class="chain-row"><div class="chain-mark">1</div><div><strong>Ingestao</strong><span>PNCP, Compras.gov.br e portais locais preservando payload bruto.</span></div></div>
+            <div class="chain-row"><div class="chain-mark">2</div><div><strong>Normalizacao</strong><span>Itens, orgaos, fornecedores, datas, regioes e valores comparaveis.</span></div></div>
+            <div class="chain-row"><div class="chain-mark">3</div><div><strong>Analise</strong><span>Outliers, concentracao, fracionamento e vizinhos de preco.</span></div></div>
+            <div class="chain-row"><div class="chain-mark">4</div><div><strong>Relatorio</strong><span>Explicacao com evidencia, incerteza e proximas verificacoes.</span></div></div>
+          </div>
+        </div>
+      </aside>
     </div>
-    <section>
-      <h2>Alertas por tipo</h2>
-      <table>
-        <thead><tr><th>Tipo</th><th>Quantidade</th></tr></thead>
-        <tbody>{risk_rows or '<tr><td colspan="2" class="muted">Nenhum alerta gerado.</td></tr>'}</tbody>
-      </table>
-    </section>
-    <section>
-      <h2>Fila de revisao</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Sev.</th><th>Score</th><th>Alerta</th><th>Item</th><th>Orgao</th>
-            <th>Fornecedor</th><th>Valor</th><th>Data</th>
-          </tr>
-        </thead>
-        <tbody>{alert_rows or '<tr><td colspan="8" class="muted">Execute a analise para preencher a fila.</td></tr>'}</tbody>
-      </table>
-    </section>
+
+    <div class="content-grid">
+      <section>
+        <div class="section-head">
+          <h2>Mapa de risco</h2>
+          <span class="small-note">Por tipologia</span>
+        </div>
+        <div class="risk-list">
+          {risk_rows or '<div class="empty">Nenhum alerta gerado.</div>'}
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>Fila de revisao</h2>
+          <span class="small-note">Prioridade por severidade</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Sev.</th><th>Score</th><th>Alerta</th><th>Item</th><th>Orgao</th>
+                <th>Fornecedor</th><th>Valor</th><th>Data</th>
+              </tr>
+            </thead>
+            <tbody>{alert_rows or '<tr><td colspan="8" class="empty">Execute a analise para preencher a fila.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   </main>
 </body>
 </html>"""
+
+
+def _risk_posture(alerts: dict[str, object]) -> dict[str, str]:
+    max_severity = int(alerts.get("max_severity") or 0)
+    alert_count = int(alerts.get("alerts") or 0)
+    if max_severity >= 3:
+        return {"label": "Risco critico", "color": "var(--red)"}
+    if alert_count:
+        return {"label": "Risco elevado", "color": "var(--orange)"}
+    return {"label": "Sem alerta ativo", "color": "var(--green)"}
+
+
+def _render_risk_type(row: dict[str, object]) -> str:
+    label = str(row["risk_type"]).replace("_", " ").title()
+    count = int(row["count"])
+    return f"""
+      <div class="risk-item">
+        <div><strong>{escape(label)}</strong><span>Alertas aguardando revisao</span></div>
+        <div class="risk-count">{count}</div>
+      </div>"""
 
 
 def _render_alert_row(row: dict[str, object]) -> str:
@@ -227,7 +550,7 @@ def _render_alert_row(row: dict[str, object]) -> str:
     <tr>
       <td><span class="{sev_class}">{severity}</span></td>
       <td>{float(row['score']):.2f}</td>
-      <td><strong>{escape(row['title'])}</strong><br><span class="muted">{escape(explanation)}</span></td>
+      <td><span class="alert-title">{escape(row['title'])}</span><span class="muted">{escape(explanation)}</span></td>
       <td>{escape(row['item_description'])}<br><span class="muted">{escape(row['state'])}</span></td>
       <td>{escape(row['agency_name'])}</td>
       <td>{escape(row['supplier_name'] or 'Nao informado')}</td>
