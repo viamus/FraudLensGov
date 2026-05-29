@@ -501,6 +501,8 @@ class Storage:
         q: str = "",
         status: str = "",
         layer: str = "",
+        sort: str = "started_at",
+        direction: str = "desc",
     ) -> dict[str, object]:
         where = []
         params: list[object] = []
@@ -516,13 +518,26 @@ class Storage:
             params.append(layer)
         where_sql = f"WHERE {' AND '.join(where)}" if where else ""
         offset = (max(page, 1) - 1) * page_size
+        order_sql = self._order_sql(
+            sort,
+            direction,
+            {
+                "name": "LOWER(name)",
+                "layer": "LOWER(layer)",
+                "status": "LOWER(status)",
+                "progress": "progress",
+                "message": "LOWER(message)",
+                "started_at": "started_at",
+            },
+            "started_at DESC",
+        )
         with self.connect() as conn:
             total = int(conn.execute(f"SELECT COUNT(*) FROM pipeline_jobs {where_sql}", params).fetchone()[0])
             rows = conn.execute(
                 f"""
                 SELECT * FROM pipeline_jobs
                 {where_sql}
-                ORDER BY started_at DESC
+                ORDER BY {order_sql}
                 LIMIT ? OFFSET ?
                 """,
                 [*params, page_size, offset],
@@ -605,6 +620,8 @@ class Storage:
         q: str = "",
         status: str = "",
         source: str = "",
+        sort: str = "started_at",
+        direction: str = "desc",
     ) -> dict[str, object]:
         where = []
         params: list[object] = []
@@ -620,13 +637,25 @@ class Storage:
             params.append(source)
         where_sql = f"WHERE {' AND '.join(where)}" if where else ""
         offset = (max(page, 1) - 1) * page_size
+        order_sql = self._order_sql(
+            sort,
+            direction,
+            {
+                "source": "LOWER(source)",
+                "status": "LOWER(status)",
+                "records_read": "records_read",
+                "records_written": "records_written",
+                "started_at": "started_at",
+            },
+            "started_at DESC",
+        )
         with self.connect() as conn:
             total = int(conn.execute(f"SELECT COUNT(*) FROM ingestion_runs {where_sql}", params).fetchone()[0])
             rows = conn.execute(
                 f"""
                 SELECT * FROM ingestion_runs
                 {where_sql}
-                ORDER BY started_at DESC
+                ORDER BY {order_sql}
                 LIMIT ? OFFSET ?
                 """,
                 [*params, page_size, offset],
@@ -668,6 +697,8 @@ class Storage:
         q: str = "",
         risk_type: str = "",
         severity: str = "",
+        sort: str = "severity",
+        direction: str = "desc",
     ) -> dict[str, object]:
         where = []
         params: list[object] = []
@@ -696,7 +727,20 @@ class Storage:
         base_join = """
             FROM analysis_alerts a
             JOIN procurement_items i ON i.id = a.item_id
+            LEFT JOIN golden_items g ON g.item_id = i.id
         """
+        order_sql = self._order_sql(
+            sort,
+            direction,
+            {
+                "severity": "a.severity",
+                "risk": "LOWER(a.risk_type)",
+                "total_value": "i.total_value",
+                "score": "a.score",
+                "quality": "LOWER(COALESCE(g.quality_level, ''))",
+            },
+            "a.severity DESC, a.score DESC, a.created_at DESC",
+        )
         with self.connect() as conn:
             total = int(conn.execute(f"SELECT COUNT(*) {base_join} {where_sql}", params).fetchone()[0])
             rows = conn.execute(
@@ -706,7 +750,7 @@ class Storage:
                        i.unit, i.source_payload
                 {base_join}
                 {where_sql}
-                ORDER BY a.severity DESC, a.score DESC, a.created_at DESC
+                ORDER BY {order_sql}
                 LIMIT ? OFFSET ?
                 """,
                 [*params, page_size, offset],
@@ -802,6 +846,8 @@ class Storage:
         page: int = 1,
         page_size: int = 10,
         q: str = "",
+        sort: str = "item_count",
+        direction: str = "desc",
     ) -> dict[str, object]:
         where = []
         params: list[object] = []
@@ -811,13 +857,25 @@ class Storage:
             params.extend([term, term])
         where_sql = f"WHERE {' AND '.join(where)}" if where else ""
         offset = (max(page, 1) - 1) * page_size
+        order_sql = self._order_sql(
+            sort,
+            direction,
+            {
+                "label": "LOWER(label)",
+                "item_count": "item_count",
+                "avg_unit_price": "avg_unit_price",
+                "states": "LOWER(states)",
+                "total_value": "total_value",
+            },
+            "item_count DESC, total_value DESC",
+        )
         with self.connect() as conn:
             total = int(conn.execute(f"SELECT COUNT(*) FROM item_clusters {where_sql}", params).fetchone()[0])
             rows = conn.execute(
                 f"""
                 SELECT * FROM item_clusters
                 {where_sql}
-                ORDER BY item_count DESC, total_value DESC
+                ORDER BY {order_sql}
                 LIMIT ? OFFSET ?
                 """,
                 [*params, page_size, offset],
@@ -831,6 +889,8 @@ class Storage:
         page_size: int = 10,
         q: str = "",
         needs_rag: str = "",
+        sort: str = "item_count",
+        direction: str = "desc",
     ) -> dict[str, object]:
         where = []
         params: list[object] = []
@@ -854,13 +914,24 @@ class Storage:
             {where_sql}
             GROUP BY category
         """
+        order_sql = self._order_sql(
+            sort,
+            direction,
+            {
+                "category": "LOWER(category)",
+                "item_count": "item_count",
+                "avg_confidence": "avg_confidence",
+                "needs_rag": "needs_rag",
+            },
+            "item_count DESC, avg_confidence DESC",
+        )
         with self.connect() as conn:
             total = int(conn.execute(f"SELECT COUNT(*) FROM ({aggregate_sql})", params).fetchone()[0])
             rows = conn.execute(
                 f"""
                 SELECT *
                 FROM ({aggregate_sql})
-                ORDER BY item_count DESC, avg_confidence DESC
+                ORDER BY {order_sql}
                 LIMIT ? OFFSET ?
                 """,
                 [*params, page_size, offset],
@@ -1008,6 +1079,8 @@ class Storage:
         page: int = 1,
         page_size: int = 10,
         q: str = "",
+        sort: str = "price_ratio",
+        direction: str = "desc",
     ) -> dict[str, object]:
         rows = self.knn_review_queue(limit=5000)
         if q:
@@ -1022,6 +1095,20 @@ class Storage:
                 or term in str(row.get("state") or "").lower()
                 or term in str(row.get("neighbor_state") or "").lower()
             ]
+        sort_keys = {
+            "item": lambda row: str(row.get("item_description") or "").lower(),
+            "neighbor": lambda row: str(row.get("neighbor_description") or "").lower(),
+            "unit": lambda row: f"{row.get('unit') or ''} {row.get('neighbor_unit') or ''}".lower(),
+            "adjusted_price": lambda row: max(
+                float(row.get("adjusted_unit_price") or 0),
+                float(row.get("neighbor_adjusted_unit_price") or 0),
+            ),
+            "price_ratio": lambda row: float(row.get("price_ratio") or 0),
+            "similarity": lambda row: float(row.get("similarity") or 0),
+        }
+        sort_key = sort_keys.get(sort)
+        if sort_key is not None:
+            rows = sorted(rows, key=sort_key, reverse=direction != "asc")
         total = len(rows)
         offset = (max(page, 1) - 1) * page_size
         return {"rows": rows[offset : offset + page_size], "total": total}
@@ -1437,6 +1524,14 @@ class Storage:
             source_payload=payload if isinstance(payload, dict) else {},
         )
         return description_quality(item)
+
+    @staticmethod
+    def _order_sql(sort: str, direction: str, allowed: dict[str, str], default: str) -> str:
+        expression = allowed.get(sort)
+        if expression is None:
+            return default
+        direction_sql = "ASC" if str(direction).lower() == "asc" else "DESC"
+        return f"{expression} {direction_sql}"
 
     @staticmethod
     def _bronze_record_to_row(

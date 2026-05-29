@@ -7,8 +7,11 @@
         <h2>Processamento</h2>
       </div>
     </div>
+    <a class="button secondary" href="{{ job_table.export_url }}"><svg><use href="#i-download"></use></svg><span>CSV</span></a>
   </div>
   <form class="table-controls" method="get" action="{{ current_path }}">
+    <input type="hidden" name="jobs_sort" value="{{ job_table.sort.key }}">
+    <input type="hidden" name="jobs_dir" value="{{ job_table.sort.direction }}">
     <input type="search" name="jobs_q" value="{{ job_table.filters.q }}" placeholder="Buscar job, etapa ou mensagem">
     <select name="jobs_status" aria-label="Status do job">
       <option value="">Todos status</option>
@@ -29,11 +32,11 @@
   <div class="table-scroll">
     <div class="data-table jobs-table" role="table" aria-label="Jobs de processamento">
       <div class="table-row table-head-row" role="row">
-        <span>Job</span>
-        <span>Camada</span>
-        <span>Status</span>
-        <span>Progresso</span>
-        <span>Mensagem</span>
+        <a class="sort-link{% if job_table.sort_links.name.active %} active{% endif %}" href="{{ job_table.sort_links.name.url }}">Job<span>{{ job_table.sort_links.name.direction }}</span></a>
+        <a class="sort-link{% if job_table.sort_links.layer.active %} active{% endif %}" href="{{ job_table.sort_links.layer.url }}">Camada<span>{{ job_table.sort_links.layer.direction }}</span></a>
+        <a class="sort-link{% if job_table.sort_links.status.active %} active{% endif %}" href="{{ job_table.sort_links.status.url }}">Status<span>{{ job_table.sort_links.status.direction }}</span></a>
+        <a class="sort-link{% if job_table.sort_links.progress.active %} active{% endif %}" href="{{ job_table.sort_links.progress.url }}">Progresso<span>{{ job_table.sort_links.progress.direction }}</span></a>
+        <a class="sort-link{% if job_table.sort_links.message.active %} active{% endif %}" href="{{ job_table.sort_links.message.url }}">Mensagem<span>{{ job_table.sort_links.message.direction }}</span></a>
       </div>
       {% for job in job_table.rows %}
         <div class="table-row" role="row">

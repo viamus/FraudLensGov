@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import csv
+import json
 from math import ceil
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
 from django.conf import settings
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 
 from fraud_lens_gov.storage import Storage
@@ -90,6 +92,24 @@ def item_neighbors_api(request, item_id: str):
     return _json({"item_id": item_id, "neighbors": _storage().item_neighbors(item_id)})
 
 
+def table_export_csv(request, table_key: str):
+    storage = _storage()
+    query = request.GET
+    table = _export_table(storage, query, table_key)
+    if table is None:
+        raise Http404("Export table not found")
+
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="fraudlens-{table_key}.csv"'
+    response.write("\ufeff")
+    writer = csv.writer(response, delimiter=";")
+    columns = table["columns"]
+    writer.writerow([column["label"] for column in columns])
+    for row in table["rows"]:
+        writer.writerow([_csv_value(row.get(column["key"])) for column in columns])
+    return response
+
+
 def _storage() -> Storage:
     storage = Storage(Path(settings.FRAUDLENS_DB))
     storage.init_schema()
@@ -98,6 +118,82 @@ def _storage() -> Storage:
 
 def _json(payload: dict[str, Any]) -> JsonResponse:
     return JsonResponse(payload, json_dumps_params={"ensure_ascii": False, "indent": 2})
+
+
+def _export_table(storage: Storage, query: Any, table_key: str) -> dict[str, Any] | None:
+    columns_by_table = {
+        "alerts": [
+            {"key": "severity", "label": "Severidade"},
+            {"key": "risk_label", "label": "Risco"},
+            {"key": "item_description", "label": "Item"},
+            {"key": "agency_name", "label": "Orgao"},
+            {"key": "supplier_name", "label": "Fornecedor"},
+            {"key": "state", "label": "UF"},
+            {"key": "total_value", "label": "Valor total"},
+            {"key": "score", "label": "Score"},
+            {"key": "quality_level", "label": "Qualidade"},
+            {"key": "detail_href", "label": "Detalhe"},
+        ],
+        "jobs": [
+            {"key": "name", "label": "Job"},
+            {"key": "layer", "label": "Camada"},
+            {"key": "current_step", "label": "Etapa"},
+            {"key": "status", "label": "Status"},
+            {"key": "progress", "label": "Progresso"},
+            {"key": "message", "label": "Mensagem"},
+            {"key": "started_at", "label": "Inicio"},
+            {"key": "updated_at", "label": "Atualizacao"},
+        ],
+        "runs": [
+            {"key": "source", "label": "Fonte"},
+            {"key": "status", "label": "Status"},
+            {"key": "records_read", "label": "Lidos"},
+            {"key": "records_written", "label": "Gravados"},
+            {"key": "started_at", "label": "Inicio"},
+            {"key": "finished_at", "label": "Fim"},
+            {"key": "error", "label": "Erro"},
+        ],
+        "categories": [
+            {"key": "category", "label": "Categoria"},
+            {"key": "item_count", "label": "Itens"},
+            {"key": "avg_confidence", "label": "Confianca media"},
+            {"key": "needs_rag", "label": "Pedem RAG"},
+        ],
+        "clusters": [
+            {"key": "label", "label": "Cluster"},
+            {"key": "item_count", "label": "Itens"},
+            {"key": "avg_unit_price", "label": "Media"},
+            {"key": "min_unit_price", "label": "Minimo"},
+            {"key": "max_unit_price", "label": "Maximo"},
+            {"key": "total_value", "label": "Valor total"},
+            {"key": "states_display", "label": "UFs"},
+        ],
+        "knn": [
+            {"key": "item_description", "label": "Item"},
+            {"key": "neighbor_description", "label": "Vizinho"},
+            {"key": "unit", "label": "Unidade"},
+            {"key": "neighbor_unit", "label": "Unidade vizinho"},
+            {"key": "adjusted_unit_price", "label": "Preco normalizado"},
+            {"key": "neighbor_adjusted_unit_price", "label": "Preco normalizado vizinho"},
+            {"key": "price_ratio", "label": "Diferenca"},
+            {"key": "similarity", "label": "Similaridade"},
+        ],
+    }
+    builders = {
+        "alerts": _alert_table,
+        "jobs": _job_table,
+        "runs": _run_table,
+        "categories": _category_table,
+        "clusters": _cluster_table,
+        "knn": _knn_table,
+    }
+    builder = builders.get(table_key)
+    columns = columns_by_table.get(table_key)
+    if builder is None or columns is None:
+        return None
+    export_query = {key: value for key, value in _query_params(query).items() if not key.endswith("_page")}
+    table = builder(storage, export_query, page_size=10000)
+    return {"rows": table["rows"], "columns": columns}
 
 
 def _dashboard_context(
@@ -238,15 +334,21 @@ def _alert_detail_context(summary: dict[str, Any], detail: dict[str, Any]) -> di
 def _alert_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]:
     prefix = "alerts"
     page = _query_page(query, prefix)
+    sort = _sort_state(query, prefix, "severity", "desc")
     filters = {
         "q": _query_value(query, f"{prefix}_q"),
         "risk_type": _query_value(query, f"{prefix}_risk_type"),
         "severity": _query_value(query, f"{prefix}_severity"),
+        "sort": sort["key"],
+        "direction": sort["direction"],
     }
     result, page, total = _clamped_paginated_result(storage.paginated_alert_rows, page, page_size, filters)
     return {
         "rows": [_alert_view(row) for row in _as_list(result.get("rows"))],
         "filters": filters,
+        "sort": sort,
+        "sort_links": _sort_links(query, prefix, sort, ["severity", "risk", "total_value", "score", "quality"]),
+        "export_url": _export_url(query, "alerts"),
         "page": _page_meta(query, prefix, page, page_size, total),
     }
 
@@ -254,15 +356,21 @@ def _alert_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]
 def _job_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]:
     prefix = "jobs"
     page = _query_page(query, prefix)
+    sort = _sort_state(query, prefix, "started_at", "desc")
     filters = {
         "q": _query_value(query, f"{prefix}_q"),
         "status": _query_value(query, f"{prefix}_status"),
         "layer": _query_value(query, f"{prefix}_layer"),
+        "sort": sort["key"],
+        "direction": sort["direction"],
     }
     result, page, total = _clamped_paginated_result(storage.paginated_pipeline_jobs, page, page_size, filters)
     return {
         "rows": [_job_view(row) for row in _as_list(result.get("rows"))],
         "filters": filters,
+        "sort": sort,
+        "sort_links": _sort_links(query, prefix, sort, ["name", "layer", "status", "progress", "message"]),
+        "export_url": _export_url(query, "jobs"),
         "page": _page_meta(query, prefix, page, page_size, total),
     }
 
@@ -270,15 +378,21 @@ def _job_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]:
 def _run_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]:
     prefix = "runs"
     page = _query_page(query, prefix)
+    sort = _sort_state(query, prefix, "started_at", "desc")
     filters = {
         "q": _query_value(query, f"{prefix}_q"),
         "status": _query_value(query, f"{prefix}_status"),
         "source": _query_value(query, f"{prefix}_source"),
+        "sort": sort["key"],
+        "direction": sort["direction"],
     }
     result, page, total = _clamped_paginated_result(storage.paginated_ingestion_runs, page, page_size, filters)
     return {
         "rows": [_run_view(row) for row in _as_list(result.get("rows"))],
         "filters": filters,
+        "sort": sort,
+        "sort_links": _sort_links(query, prefix, sort, ["source", "status", "records_read", "records_written", "started_at"]),
+        "export_url": _export_url(query, "runs"),
         "page": _page_meta(query, prefix, page, page_size, total),
     }
 
@@ -286,14 +400,20 @@ def _run_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]:
 def _category_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]:
     prefix = "categories"
     page = _query_page(query, prefix)
+    sort = _sort_state(query, prefix, "item_count", "desc")
     filters = {
         "q": _query_value(query, f"{prefix}_q"),
         "needs_rag": _query_value(query, f"{prefix}_needs_rag"),
+        "sort": sort["key"],
+        "direction": sort["direction"],
     }
     result, page, total = _clamped_paginated_result(storage.paginated_item_categories, page, page_size, filters)
     return {
         "rows": [_category_view(row) for row in _as_list(result.get("rows"))],
         "filters": filters,
+        "sort": sort,
+        "sort_links": _sort_links(query, prefix, sort, ["category", "item_count", "avg_confidence", "needs_rag"]),
+        "export_url": _export_url(query, "categories"),
         "page": _page_meta(query, prefix, page, page_size, total),
     }
 
@@ -301,11 +421,15 @@ def _category_table(storage: Storage, query: Any, page_size: int) -> dict[str, A
 def _cluster_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]:
     prefix = "clusters"
     page = _query_page(query, prefix)
-    filters = {"q": _query_value(query, f"{prefix}_q")}
+    sort = _sort_state(query, prefix, "item_count", "desc")
+    filters = {"q": _query_value(query, f"{prefix}_q"), "sort": sort["key"], "direction": sort["direction"]}
     result, page, total = _clamped_paginated_result(storage.paginated_item_clusters, page, page_size, filters)
     return {
         "rows": [_cluster_view(row) for row in _as_list(result.get("rows"))],
         "filters": filters,
+        "sort": sort,
+        "sort_links": _sort_links(query, prefix, sort, ["label", "item_count", "avg_unit_price", "states", "total_value"]),
+        "export_url": _export_url(query, "clusters"),
         "page": _page_meta(query, prefix, page, page_size, total),
     }
 
@@ -313,11 +437,15 @@ def _cluster_table(storage: Storage, query: Any, page_size: int) -> dict[str, An
 def _knn_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]:
     prefix = "knn"
     page = _query_page(query, prefix)
-    filters = {"q": _query_value(query, f"{prefix}_q")}
+    sort = _sort_state(query, prefix, "price_ratio", "desc")
+    filters = {"q": _query_value(query, f"{prefix}_q"), "sort": sort["key"], "direction": sort["direction"]}
     result, page, total = _clamped_paginated_result(storage.paginated_knn_review_queue, page, page_size, filters)
     return {
         "rows": [_knn_pair_view(row) for row in _as_list(result.get("rows"))],
         "filters": filters,
+        "sort": sort,
+        "sort_links": _sort_links(query, prefix, sort, ["item", "neighbor", "unit", "adjusted_price", "price_ratio"]),
+        "export_url": _export_url(query, "knn"),
         "page": _page_meta(query, prefix, page, page_size, total),
     }
 
@@ -332,6 +460,43 @@ def _query_page(query: Any, prefix: str) -> int:
         return max(1, int(_query_value(query, f"{prefix}_page") or "1"))
     except ValueError:
         return 1
+
+
+def _sort_state(query: Any, prefix: str, default_key: str, default_direction: str) -> dict[str, str]:
+    key = _query_value(query, f"{prefix}_sort") or default_key
+    direction = (_query_value(query, f"{prefix}_dir") or default_direction).lower()
+    if direction not in {"asc", "desc"}:
+        direction = default_direction
+    return {"key": key, "direction": direction}
+
+
+def _sort_links(query: Any, prefix: str, sort: dict[str, str], keys: list[str]) -> dict[str, dict[str, Any]]:
+    return {key: _sort_link(query, prefix, key, sort) for key in keys}
+
+
+def _sort_link(query: Any, prefix: str, key: str, sort: dict[str, str]) -> dict[str, Any]:
+    active = sort["key"] == key
+    next_direction = "asc" if active and sort["direction"] == "desc" else "desc" if active else "asc"
+    params = _query_params(query)
+    params[f"{prefix}_sort"] = key
+    params[f"{prefix}_dir"] = next_direction
+    params[f"{prefix}_page"] = "1"
+    return {
+        "url": f"?{urlencode(params)}",
+        "active": active,
+        "direction": sort["direction"] if active else "",
+        "next_direction": next_direction,
+    }
+
+
+def _export_url(query: Any, table_key: str) -> str:
+    params = {
+        key: value
+        for key, value in _query_params(query).items()
+        if key.startswith(f"{table_key}_") and not key.endswith("_page")
+    }
+    query_string = urlencode(params)
+    return f"/export/{table_key}{'?' + query_string if query_string else ''}"
 
 
 def _clamped_paginated_result(fetch: Any, page: int, page_size: int, filters: dict[str, str]) -> tuple[dict[str, Any], int, int]:
@@ -365,9 +530,13 @@ def _page_meta(query: Any, prefix: str, page: int, page_size: int, total: int) -
 
 
 def _page_url(query: Any, prefix: str, page: int) -> str:
-    params = {str(key): str(value) for key, value in getattr(query, "items", lambda: [])() if value not in {"", None}}
+    params = _query_params(query)
     params[f"{prefix}_page"] = str(page)
     return f"?{urlencode(params)}"
+
+
+def _query_params(query: Any) -> dict[str, str]:
+    return {str(key): str(value) for key, value in getattr(query, "items", lambda: [])() if value not in {"", None}}
 
 
 def _page_copy(active_page: str) -> dict[str, str]:
@@ -642,3 +811,11 @@ def _float(value: Any) -> float:
         return float(value or 0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _csv_value(value: Any) -> str:
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    if value is None:
+        return ""
+    return str(value)

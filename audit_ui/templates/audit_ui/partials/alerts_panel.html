@@ -7,9 +7,14 @@
         <h2>Fila estatística</h2>
       </div>
     </div>
-    <a class="button secondary" href="/api/summary"><svg><use href="#i-code"></use></svg><span>API</span></a>
+    <div class="panel-actions">
+      <a class="button secondary" href="{{ alert_table.export_url }}"><svg><use href="#i-download"></use></svg><span>CSV</span></a>
+      <a class="button secondary" href="/api/summary"><svg><use href="#i-code"></use></svg><span>API</span></a>
+    </div>
   </div>
   <form class="table-controls" method="get" action="{{ current_path }}">
+    <input type="hidden" name="alerts_sort" value="{{ alert_table.sort.key }}">
+    <input type="hidden" name="alerts_dir" value="{{ alert_table.sort.direction }}">
     <input type="search" name="alerts_q" value="{{ alert_table.filters.q }}" placeholder="Buscar item, órgão ou fornecedor">
     <select name="alerts_risk_type" aria-label="Tipo de risco">
       <option value="">Todos os riscos</option>
@@ -29,11 +34,11 @@
   <div class="table-scroll">
     <div class="data-table alerts-table" role="table" aria-label="Fila estatística">
       <div class="table-row table-head-row" role="row">
-        <span>Sev.</span>
-        <span>Risco / item</span>
-        <span>Valor</span>
-        <span>Score</span>
-        <span>Qualidade</span>
+        <a class="sort-link{% if alert_table.sort_links.severity.active %} active{% endif %}" href="{{ alert_table.sort_links.severity.url }}">Sev.<span>{{ alert_table.sort_links.severity.direction }}</span></a>
+        <a class="sort-link{% if alert_table.sort_links.risk.active %} active{% endif %}" href="{{ alert_table.sort_links.risk.url }}">Risco / item<span>{{ alert_table.sort_links.risk.direction }}</span></a>
+        <a class="sort-link{% if alert_table.sort_links.total_value.active %} active{% endif %}" href="{{ alert_table.sort_links.total_value.url }}">Valor<span>{{ alert_table.sort_links.total_value.direction }}</span></a>
+        <a class="sort-link{% if alert_table.sort_links.score.active %} active{% endif %}" href="{{ alert_table.sort_links.score.url }}">Score<span>{{ alert_table.sort_links.score.direction }}</span></a>
+        <a class="sort-link{% if alert_table.sort_links.quality.active %} active{% endif %}" href="{{ alert_table.sort_links.quality.url }}">Qualidade<span>{{ alert_table.sort_links.quality.direction }}</span></a>
         <span>Ação</span>
       </div>
       {% for alert in alert_table.rows %}

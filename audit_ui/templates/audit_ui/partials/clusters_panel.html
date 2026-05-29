@@ -7,8 +7,11 @@
         <h2>Itens comparáveis</h2>
       </div>
     </div>
+    <a class="button secondary" href="{{ cluster_table.export_url }}"><svg><use href="#i-download"></use></svg><span>CSV</span></a>
   </div>
   <form class="table-controls" method="get" action="{{ current_path }}">
+    <input type="hidden" name="clusters_sort" value="{{ cluster_table.sort.key }}">
+    <input type="hidden" name="clusters_dir" value="{{ cluster_table.sort.direction }}">
     <input type="search" name="clusters_q" value="{{ cluster_table.filters.q }}" placeholder="Buscar cluster ou UF">
     <button class="button primary" type="submit"><svg><use href="#i-filter"></use></svg><span>Filtrar</span></button>
     <a class="button ghost" href="{{ current_path }}"><svg><use href="#i-clear"></use></svg><span>Limpar</span></a>
@@ -16,11 +19,11 @@
   <div class="table-scroll">
     <div class="data-table clusters-table" role="table" aria-label="Clusters comparáveis">
       <div class="table-row table-head-row" role="row">
-        <span>Cluster</span>
-        <span>Itens</span>
-        <span>Média</span>
-        <span>Faixa</span>
-        <span>UFs</span>
+        <a class="sort-link{% if cluster_table.sort_links.label.active %} active{% endif %}" href="{{ cluster_table.sort_links.label.url }}">Cluster<span>{{ cluster_table.sort_links.label.direction }}</span></a>
+        <a class="sort-link{% if cluster_table.sort_links.item_count.active %} active{% endif %}" href="{{ cluster_table.sort_links.item_count.url }}">Itens<span>{{ cluster_table.sort_links.item_count.direction }}</span></a>
+        <a class="sort-link{% if cluster_table.sort_links.avg_unit_price.active %} active{% endif %}" href="{{ cluster_table.sort_links.avg_unit_price.url }}">Média<span>{{ cluster_table.sort_links.avg_unit_price.direction }}</span></a>
+        <a class="sort-link{% if cluster_table.sort_links.total_value.active %} active{% endif %}" href="{{ cluster_table.sort_links.total_value.url }}">Faixa<span>{{ cluster_table.sort_links.total_value.direction }}</span></a>
+        <a class="sort-link{% if cluster_table.sort_links.states.active %} active{% endif %}" href="{{ cluster_table.sort_links.states.url }}">UFs<span>{{ cluster_table.sort_links.states.direction }}</span></a>
         <span>Ação</span>
       </div>
       {% for cluster in cluster_table.rows %}

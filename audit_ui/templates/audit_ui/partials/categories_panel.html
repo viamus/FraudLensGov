@@ -7,6 +7,7 @@
         <h2>Categorias candidatas</h2>
       </div>
     </div>
+    <a class="button secondary" href="{{ category_table.export_url }}"><svg><use href="#i-download"></use></svg><span>CSV</span></a>
   </div>
   <div class="summary-strip">
     <div><span>Categorizados</span><strong>{{ category_totals.categorized }}</strong></div>
@@ -14,6 +15,8 @@
     <div><span>Pedem RAG</span><strong>{{ category_totals.needs_rag }}</strong></div>
   </div>
   <form class="table-controls" method="get" action="{{ current_path }}">
+    <input type="hidden" name="categories_sort" value="{{ category_table.sort.key }}">
+    <input type="hidden" name="categories_dir" value="{{ category_table.sort.direction }}">
     <input type="search" name="categories_q" value="{{ category_table.filters.q }}" placeholder="Buscar categoria ou nome canônico">
     <select name="categories_needs_rag" aria-label="Filtro RAG">
       <option value="">Todos</option>
@@ -26,10 +29,10 @@
   <div class="table-scroll">
     <div class="data-table categories-table" role="table" aria-label="Categorias candidatas">
       <div class="table-row table-head-row" role="row">
-        <span>Categoria</span>
-        <span>Itens</span>
-        <span>Confiança</span>
-        <span>RAG</span>
+        <a class="sort-link{% if category_table.sort_links.category.active %} active{% endif %}" href="{{ category_table.sort_links.category.url }}">Categoria<span>{{ category_table.sort_links.category.direction }}</span></a>
+        <a class="sort-link{% if category_table.sort_links.item_count.active %} active{% endif %}" href="{{ category_table.sort_links.item_count.url }}">Itens<span>{{ category_table.sort_links.item_count.direction }}</span></a>
+        <a class="sort-link{% if category_table.sort_links.avg_confidence.active %} active{% endif %}" href="{{ category_table.sort_links.avg_confidence.url }}">Confiança<span>{{ category_table.sort_links.avg_confidence.direction }}</span></a>
+        <a class="sort-link{% if category_table.sort_links.needs_rag.active %} active{% endif %}" href="{{ category_table.sort_links.needs_rag.url }}">RAG<span>{{ category_table.sort_links.needs_rag.direction }}</span></a>
       </div>
       {% for category in category_table.rows %}
         <div class="table-row" role="row">

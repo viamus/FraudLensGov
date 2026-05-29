@@ -7,8 +7,11 @@
         <h2>Execuções recentes</h2>
       </div>
     </div>
+    <a class="button secondary" href="{{ run_table.export_url }}"><svg><use href="#i-download"></use></svg><span>CSV</span></a>
   </div>
   <form class="table-controls" method="get" action="{{ current_path }}">
+    <input type="hidden" name="runs_sort" value="{{ run_table.sort.key }}">
+    <input type="hidden" name="runs_dir" value="{{ run_table.sort.direction }}">
     <input type="search" name="runs_q" value="{{ run_table.filters.q }}" placeholder="Buscar fonte, parâmetros ou erro">
     <select name="runs_status" aria-label="Status da ingestão">
       <option value="">Todos status</option>
@@ -24,10 +27,10 @@
   <div class="table-scroll">
     <div class="data-table runs-table" role="table" aria-label="Execuções recentes">
       <div class="table-row table-head-row" role="row">
-        <span>Fonte</span>
-        <span>Status</span>
-        <span>Lidos</span>
-        <span>Gravados</span>
+        <a class="sort-link{% if run_table.sort_links.source.active %} active{% endif %}" href="{{ run_table.sort_links.source.url }}">Fonte<span>{{ run_table.sort_links.source.direction }}</span></a>
+        <a class="sort-link{% if run_table.sort_links.status.active %} active{% endif %}" href="{{ run_table.sort_links.status.url }}">Status<span>{{ run_table.sort_links.status.direction }}</span></a>
+        <a class="sort-link{% if run_table.sort_links.records_read.active %} active{% endif %}" href="{{ run_table.sort_links.records_read.url }}">Lidos<span>{{ run_table.sort_links.records_read.direction }}</span></a>
+        <a class="sort-link{% if run_table.sort_links.records_written.active %} active{% endif %}" href="{{ run_table.sort_links.records_written.url }}">Gravados<span>{{ run_table.sort_links.records_written.direction }}</span></a>
       </div>
       {% for run in run_table.rows %}
         <div class="table-row" role="row">

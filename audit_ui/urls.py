@@ -12,6 +12,7 @@ urlpatterns = [
     path("investigacao/alertas/<str:alert_id>", views.alert_detail_page, name="alert-detail"),
     path("normalizacao", views.normalization_page, name="normalization"),
     path("operacao", views.operation_page, name="operation"),
+    path("export/<str:table_key>", views.table_export_csv, name="table-export-csv"),
     path("api/summary", views.summary_api, name="summary-api"),
     path("api/pipeline", views.pipeline_api, name="pipeline-api"),
     path("api/knn-review", views.knn_review_api, name="knn-review-api"),

@@ -127,3 +127,30 @@ def test_django_table_page_overflow_uses_last_available_page(tmp_path: Path):
     html = response.content.decode("utf-8")
     assert "Sem alerta estat" not in html
     assert "999 /" not in html
+
+
+def test_django_tables_sort_and_export_csv(tmp_path: Path):
+    db_path = tmp_path / "fraudlens.sqlite"
+    _seed_dashboard_db(db_path)
+
+    with override_settings(FRAUDLENS_DB=str(db_path)):
+        sorted_response = Client().get(
+            "/investigacao",
+            {"alerts_q": "notebook", "alerts_sort": "total_value", "alerts_dir": "desc"},
+        )
+        csv_response = Client().get(
+            "/export/alerts",
+            {"alerts_q": "notebook", "alerts_sort": "total_value", "alerts_dir": "desc"},
+        )
+
+    assert sorted_response.status_code == 200
+    html = sorted_response.content.decode("utf-8")
+    assert "alerts_sort=score" in html
+    assert "/export/alerts?alerts_q=notebook&amp;alerts_sort=total_value&amp;alerts_dir=desc" in html
+
+    assert csv_response.status_code == 200
+    assert csv_response["Content-Type"].startswith("text/csv")
+    assert "fraudlens-alerts.csv" in csv_response["Content-Disposition"]
+    csv_text = csv_response.content.decode("utf-8-sig")
+    assert "Severidade;Risco;Item" in csv_text
+    assert "NOTEBOOK CORPORATIVO" in csv_text

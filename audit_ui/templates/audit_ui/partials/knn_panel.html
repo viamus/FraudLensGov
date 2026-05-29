@@ -7,9 +7,14 @@
         <h2>Pares para revisão</h2>
       </div>
     </div>
-    <a class="button secondary" href="/api/knn-review"><svg><use href="#i-code"></use></svg><span>API</span></a>
+    <div class="panel-actions">
+      <a class="button secondary" href="{{ knn_table.export_url }}"><svg><use href="#i-download"></use></svg><span>CSV</span></a>
+      <a class="button secondary" href="/api/knn-review"><svg><use href="#i-code"></use></svg><span>API</span></a>
+    </div>
   </div>
   <form class="table-controls" method="get" action="{{ current_path }}">
+    <input type="hidden" name="knn_sort" value="{{ knn_table.sort.key }}">
+    <input type="hidden" name="knn_dir" value="{{ knn_table.sort.direction }}">
     <input type="search" name="knn_q" value="{{ knn_table.filters.q }}" placeholder="Buscar item, vizinho, unidade ou UF">
     <button class="button primary" type="submit"><svg><use href="#i-filter"></use></svg><span>Filtrar</span></button>
     <a class="button ghost" href="{{ current_path }}"><svg><use href="#i-clear"></use></svg><span>Limpar</span></a>
@@ -17,11 +22,11 @@
   <div class="table-scroll">
     <div class="data-table knn-table" role="table" aria-label="Pares KNN para revisão">
       <div class="table-row table-head-row" role="row">
-        <span>Item</span>
-        <span>Vizinho</span>
-        <span>Unidades</span>
-        <span>Preço normalizado</span>
-        <span>Diferença</span>
+        <a class="sort-link{% if knn_table.sort_links.item.active %} active{% endif %}" href="{{ knn_table.sort_links.item.url }}">Item<span>{{ knn_table.sort_links.item.direction }}</span></a>
+        <a class="sort-link{% if knn_table.sort_links.neighbor.active %} active{% endif %}" href="{{ knn_table.sort_links.neighbor.url }}">Vizinho<span>{{ knn_table.sort_links.neighbor.direction }}</span></a>
+        <a class="sort-link{% if knn_table.sort_links.unit.active %} active{% endif %}" href="{{ knn_table.sort_links.unit.url }}">Unidades<span>{{ knn_table.sort_links.unit.direction }}</span></a>
+        <a class="sort-link{% if knn_table.sort_links.adjusted_price.active %} active{% endif %}" href="{{ knn_table.sort_links.adjusted_price.url }}">Preço normalizado<span>{{ knn_table.sort_links.adjusted_price.direction }}</span></a>
+        <a class="sort-link{% if knn_table.sort_links.price_ratio.active %} active{% endif %}" href="{{ knn_table.sort_links.price_ratio.url }}">Diferença<span>{{ knn_table.sort_links.price_ratio.direction }}</span></a>
       </div>
       {% for pair in knn_table.rows %}
         <div class="table-row" role="row">

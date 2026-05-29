@@ -596,6 +596,14 @@ svg {
   flex: 0 0 auto;
 }
 
+.panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .panel-head h2 {
   margin-top: 3px;
   font-size: var(--md-sys-type-title-medium);
@@ -704,6 +712,27 @@ svg {
   text-transform: uppercase;
 }
 
+.sort-link {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.sort-link:hover,
+.sort-link.active {
+  color: var(--accent);
+}
+
+.sort-link span {
+  min-width: 24px;
+  color: var(--soft);
+  font-size: var(--md-sys-type-label-small);
+  text-transform: uppercase;
+}
+
 .table-row strong {
   color: var(--ink);
   font-size: var(--md-sys-type-title-small);
@@ -719,6 +748,18 @@ svg {
   font-size: var(--md-sys-type-body-small);
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+.table-head-row .sort-link {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+}
+
+.table-head-row .sort-link:hover,
+.table-head-row .sort-link.active {
+  color: var(--accent);
 }
 
 .primary-cell strong {
