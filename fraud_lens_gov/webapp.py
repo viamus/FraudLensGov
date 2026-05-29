@@ -34,6 +34,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if path == "/api/summary":
             self._send_json(self.app_storage.dashboard_summary())
             return
+        if path == "/api/pipeline":
+            summary = self.app_storage.dashboard_summary()
+            self._send_json({
+                "layers": summary.get("layers", {}),
+                "pipeline_jobs": summary.get("pipeline_jobs", []),
+            })
+            return
         if path.startswith("/api/clusters/"):
             cluster_id = unquote(path.removeprefix("/api/clusters/"))
             detail = self.app_storage.cluster_detail(cluster_id)
@@ -84,11 +91,15 @@ def render_dashboard(summary: dict[str, object]) -> str:
     cluster_totals = summary.get("cluster_totals", {"clusters": 0, "clustered_items": 0})
     top_clusters = summary.get("top_clusters", [])
     ingestion_runs = summary.get("ingestion_runs", [])
+    layers = summary.get("layers", {})
+    pipeline_jobs = summary.get("pipeline_jobs", [])
     posture = _risk_posture(alerts)
     risk_rows = "".join(_render_risk_type(row) for row in risk_types)
     alert_rows = "".join(_render_alert_row(row) for row in top_alerts)
     cluster_rows = "".join(_render_cluster(row) for row in top_clusters)
     run_rows = "".join(_render_ingestion_run(row) for row in ingestion_runs)
+    layer_rows = _render_layers(layers)
+    job_rows = "".join(_render_pipeline_job(row) for row in pipeline_jobs)
     return f"""<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -350,6 +361,75 @@ def render_dashboard(summary: dict[str, object]) -> str:
       display: grid;
       gap: 10px;
     }}
+    .pipeline-grid {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, .9fr);
+      gap: 12px;
+      padding: 12px;
+    }}
+    .layer-grid {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }}
+    .layer-item,
+    .job-item {{
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 12px;
+      min-width: 0;
+    }}
+    .layer-item {{
+      border-top: 4px solid var(--blue);
+      min-height: 116px;
+    }}
+    .layer-item strong {{
+      display: block;
+      color: var(--blue-dark);
+      font-size: 14px;
+      text-transform: uppercase;
+    }}
+    .layer-item b {{
+      display: block;
+      margin: 8px 0;
+      font-size: 26px;
+      line-height: 1;
+    }}
+    .layer-item span,
+    .job-item span {{
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }}
+    .job-list {{
+      display: grid;
+      gap: 10px;
+    }}
+    .job-head {{
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: start;
+      margin-bottom: 9px;
+    }}
+    .job-title {{
+      color: var(--blue-dark);
+      font-weight: 900;
+      font-size: 13px;
+      text-transform: uppercase;
+    }}
+    .progress-track {{
+      height: 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      overflow: hidden;
+      margin: 8px 0;
+    }}
+    .progress-fill {{
+      height: 100%;
+      background: var(--blue);
+    }}
     .risk-item {{
       display: grid;
       grid-template-columns: 1fr auto;
@@ -419,7 +499,8 @@ def render_dashboard(summary: dict[str, object]) -> str:
     }}
     .status-ok,
     .status-running,
-    .status-failed {{
+    .status-failed,
+    .status-partial {{
       display: inline-block;
       padding: 4px 7px;
       color: #fff;
@@ -430,6 +511,7 @@ def render_dashboard(summary: dict[str, object]) -> str:
     .status-ok {{ background: var(--green); }}
     .status-running {{ background: var(--blue); }}
     .status-failed {{ background: var(--red); }}
+    .status-partial {{ background: var(--orange); }}
     .table-wrap {{
       display: block;
       overflow-x: auto;
@@ -492,11 +574,15 @@ def render_dashboard(summary: dict[str, object]) -> str:
     }}
     @media (max-width: 980px) {{
       .command-grid,
-      .content-grid {{
+      .content-grid,
+      .pipeline-grid {{
         grid-template-columns: 1fr;
       }}
       .metrics {{
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }}
+      .layer-grid {{
+        grid-template-columns: 1fr;
       }}
       .topbar-inner {{
         align-items: flex-start;
@@ -555,7 +641,7 @@ def render_dashboard(summary: dict[str, object]) -> str:
         <p class="hero-copy">A fila abaixo consolida compras, fornecedores, valores unitarios e sinais estatisticos para orientar auditoria, controle social e revisao documental.</p>
         <div class="metrics">
           <div class="metric"><span>Itens analisados</span><strong>{totals["items"]}</strong></div>
-          <div class="metric"><span>Valor observado</span><strong>{money(totals["total_value"])}</strong></div>
+          <div class="metric"><span>Valor observado</span><strong>{compact_money(totals["total_value"])}</strong></div>
           <div class="metric"><span>Fornecedores</span><strong>{totals["suppliers"]}</strong></div>
           <div class="metric"><span>Clusters</span><strong>{cluster_totals["clusters"]}</strong></div>
           <div class="metric"><span>Alertas ativos</span><strong>{alerts["alerts"]}</strong></div>
@@ -576,6 +662,17 @@ def render_dashboard(summary: dict[str, object]) -> str:
     </div>
 
     <div class="content-grid">
+      <section class="section-wide">
+        <div class="section-head">
+          <h2>Pipeline de dados</h2>
+          <span class="small-note">Bronze / Silver / Golden</span>
+        </div>
+        <div class="pipeline-grid">
+          <div class="layer-grid">{layer_rows}</div>
+          <div class="job-list">{job_rows or '<div class="empty">Nenhum processamento em andamento.</div>'}</div>
+        </div>
+      </section>
+
       <section>
         <div class="section-head">
           <h2>Mapa de risco</h2>
@@ -649,6 +746,50 @@ def _render_risk_type(row: dict[str, object]) -> str:
       </div>"""
 
 
+def _render_layers(layers: object) -> str:
+    data = layers if isinstance(layers, dict) else {}
+    bronze = data.get("bronze", {}) if isinstance(data.get("bronze", {}), dict) else {}
+    silver = data.get("silver", {}) if isinstance(data.get("silver", {}), dict) else {}
+    golden = data.get("golden", {}) if isinstance(data.get("golden", {}), dict) else {}
+    rows = [
+        ("Bronze", bronze.get("total", 0), f"pendentes {bronze.get('pending', 0)} | silver {bronze.get('silvered', 0)} | falhas {bronze.get('failed', 0)}"),
+        ("Silver", silver.get("total", 0), "itens normalizados em tabela operacional"),
+        ("Golden", golden.get("total", 0), f"comparaveis {golden.get('comparable', 0)} | genericos {golden.get('generic', 0)} | ausentes {golden.get('missing', 0)}"),
+    ]
+    return "".join(
+        f"""
+        <div class="layer-item">
+          <strong>{escape(label)}</strong>
+          <b>{int(value or 0)}</b>
+          <span>{escape(meta)}</span>
+        </div>"""
+        for label, value, meta in rows
+    )
+
+
+def _render_pipeline_job(row: dict[str, object]) -> str:
+    status = str(row.get("status") or "").lower()
+    status_class = {
+        "success": "status-ok",
+        "running": "status-running",
+        "failed": "status-failed",
+        "partial": "status-partial",
+    }.get(status, "status-running")
+    progress = max(0.0, min(float(row.get("progress") or 0), 100.0))
+    return f"""
+      <div class="job-item">
+        <div class="job-head">
+          <div>
+            <div class="job-title">{escape(row.get("name"))}</div>
+            <span>{escape(row.get("layer"))} | {escape(row.get("current_step") or "aguardando")}</span>
+          </div>
+          <span class="{status_class}">{escape(status or "n/a")}</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" style="width: {progress:.2f}%"></div></div>
+        <span>{progress:.0f}% | {int(row.get("steps_done") or 0)} de {int(row.get("steps_total") or 0)} etapas | {escape(row.get("message"))}</span>
+      </div>"""
+
+
 def _render_cluster(row: dict[str, object]) -> str:
     states = _states(row.get("states"))
     label = str(row.get("label") or "Cluster sem rotulo")
@@ -687,12 +828,14 @@ def _render_alert_row(row: dict[str, object]) -> str:
     severity = int(row["severity"])
     sev_class = "severity high" if severity >= 3 else "severity"
     explanation = row.get("genai_explanation") or row.get("explanation") or ""
+    quality = row.get("description_quality") or {}
+    quality_label = str(quality.get("level") or "unknown")
     return f"""
     <tr>
       <td><span class="{sev_class}">{severity}</span></td>
       <td>{float(row['score']):.2f}</td>
       <td><a class="alert-title action-link" href="/api/alerts/{escape(row['id'])}">{escape(row['title'])}</a><span class="muted">{escape(explanation)}</span></td>
-      <td>{escape(row['item_description'])}<br><span class="muted">{escape(row['state'])}</span></td>
+      <td>{escape(row['item_description'])}<br><span class="muted">{escape(row['state'])} | qualidade: {escape(quality_label)}</span></td>
       <td>{escape(row['agency_name'])}</td>
       <td>{escape(row['supplier_name'] or 'Nao informado')}<br><a class="action-link muted" href="/api/items/{escape(row['item_id'])}/neighbors">vizinhos</a></td>
       <td class="money">{money(row['total_value'])}</td>
@@ -703,6 +846,17 @@ def _render_alert_row(row: dict[str, object]) -> str:
 def money(value: object) -> str:
     amount = float(value or 0)
     return f"R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def compact_money(value: object) -> str:
+    amount = float(value or 0)
+    if abs(amount) >= 1_000_000_000:
+        return f"R$ {amount / 1_000_000_000:.1f} bi".replace(".", ",")
+    if abs(amount) >= 1_000_000:
+        return f"R$ {amount / 1_000_000:.1f} mi".replace(".", ",")
+    if abs(amount) >= 1_000:
+        return f"R$ {amount / 1_000:.1f} mil".replace(".", ",")
+    return money(amount)
 
 
 def _states(value: object) -> list[str]:

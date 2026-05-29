@@ -69,10 +69,13 @@ Fluxo principal:
 PNCP / Compras.gov.br / Portais locais / Google discovery
         |
         v
-Ingestao com conectores versionados
+Bronze Layer: ingestao crua por fonte, janela, endpoint e payload
         |
         v
-Normalizacao canonica de itens, orgaos, fornecedores e documentos
+Silver Layer: normalizacao SQL, enriquecimento PNCP e metadados publicos
+        |
+        v
+Golden Layer: dataset auditavel para comparacao, KNN, alertas e RAG
         |
         v
 Base historica de precos e eventos
@@ -91,7 +94,7 @@ Componentes:
 
 - `sources`: clientes de API e conectores de portais.
 - `normalization`: conversao de payloads externos para modelo canonico.
-- `storage`: persistencia local e, depois, adapter Postgres.
+- `storage`: persistencia local, camadas Bronze/Silver/Golden e, depois, adapter Postgres.
 - `anomalies`: regras estatisticas explicaveis, outliers e comparacao por vizinhos proximos.
 - `rag`: recuperacao de trechos de edital, termo de referencia e historico de precos.
 - `genai`: explicacao de alertas via API de modelo configuravel.
@@ -110,16 +113,23 @@ Motivos:
 - SQLite e leve para prototipo local, reproduzivel e facil de versionar em ambiente de desenvolvimento.
 - O dashboard via servidor HTTP padrao reduz complexidade inicial.
 
-### Proxima etapa: FastAPI + Postgres + fila
+### Proxima etapa: Django + Postgres + fila
 
 Quando o volume crescer:
 
-- FastAPI para API interna REST.
+- Django para ORM, migrations, admin, autenticacao e telas operacionais de revisao.
 - Postgres para historico, indices, particionamento e consultas analiticas.
-- SQLAlchemy ou SQLModel apenas quando a modelagem estabilizar.
-- Alembic para migracoes.
-- Worker separado para ingestao incremental.
+- Celery, RQ ou Dramatiq para workers de Bronze, Silver, Golden e RAG.
+- Redis ou Postgres como backend de fila conforme o ambiente.
+- Django REST Framework apenas quando houver API externa de consumo.
 - Playwright apenas se algum portal local exigir navegacao, com isolamento e limites.
+
+O prototipo atual mantem o core em Python puro para reduzir supply chain, mas os conceitos ja foram separados para migrar naturalmente para apps Django:
+
+- `bronze_records`: captura rapida dos 10 anos sem enriquecimento.
+- `procurement_items`: camada Silver normalizada e enriquecida.
+- `golden_items`: metadados de qualidade, comparabilidade e materializacao analitica.
+- `pipeline_jobs`: progresso observavel com percentual, etapa atual e erro.
 
 ### GraphQL
 
@@ -254,11 +264,13 @@ Ao adicionar dependencias:
 - Melhorar paginacao e checkpoints por fonte.
 - Enriquecer itens Compras.gov.br com descricao de item quando disponivel.
 - Criar tabela de execucoes de ingestao.
+- Criar Bronze/Silver/Golden com progresso por job.
 - Materializar clusters KNN lexicais de itens comparaveis.
 - Persistir vizinhos KNN ranqueados por item para explicar agrupamentos.
 - Adicionar exportacao CSV/JSON/Markdown de alertas.
 - Criar testes de contrato para payloads de PNCP e Compras.gov.br.
 - Persistir vizinhos comparaveis usados em cada alerta.
+- Bloquear descricoes genericas sem catalogo/complemento em clusters e outliers.
 
 ### Fase 2 - Base Historica
 
@@ -311,6 +323,14 @@ Ingerir Compras.gov.br:
 python -m fraud_lens_gov ingest-compras --start 2025-09-01 --end 2025-09-02 --page-size 10 --max-pages 1 --analyze --cluster
 ```
 
+Rodar o pipeline em camadas:
+
+```powershell
+python -m fraud_lens_gov backfill-bronze --source both --start 2016-05-29 --end 2026-05-29 --window-days 30 --max-pages 1 --async
+python -m fraud_lens_gov build-silver --source both --async
+python -m fraud_lens_gov build-golden --analyze --cluster --async
+```
+
 Reconstruir clusters:
 
 ```powershell
@@ -327,6 +347,7 @@ Endpoints locais de investigacao:
 
 ```text
 GET /api/summary
+GET /api/pipeline
 GET /api/clusters/{cluster_id}
 GET /api/alerts/{alert_id}
 GET /api/items/{item_id}/neighbors

@@ -75,14 +75,16 @@ def from_compras_award(raw: dict[str, Any]) -> ProcurementItem:
     item_code = str(raw.get("idCompraItem") or raw.get("numeroItemPncp") or "")
     procurement_id = str(raw.get("idContratacaoPNCP") or raw.get("idCompra") or "")
     description = raw.get("descricaoItem") or f"ITEM PNCP {raw.get('numeroItemPncp') or item_code}"
+    unit = raw.get("unidadeMedida") or "UN"
+    item_catalog_code = raw.get("catalogoCodigoItem")
     return ProcurementItem(
         id=stable_id("compras_gov", source_record_id),
         source="compras_gov",
         source_record_id=str(source_record_id),
         procurement_id=procurement_id,
-        item_code=item_code,
+        item_code=str(item_catalog_code or item_code),
         item_description=normalize_text(description),
-        unit="UN",
+        unit=normalize_text(unit),
         quantity=quantity,
         unit_price=unit_price,
         total_value=total_value,

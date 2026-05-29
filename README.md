@@ -11,6 +11,7 @@ The current prototype uses only the Python standard library:
 - Public API connectors for PNCP and Compras.gov.br.
 - Optional Google Programmable Search discovery for local procurement portals.
 - Local SQLite storage for development.
+- Bronze/Silver/Golden processing layers with observable pipeline jobs.
 - Statistical anomaly detection with an initial nearest-neighbor comparable-price strategy.
 - KNN-style lexical clusters persisted locally for comparable item review.
 - Optional OpenAI Responses API explanations.
@@ -57,6 +58,20 @@ Build clusters again after any manual data change:
 python -m fraud_lens_gov build-clusters --k 8 --min-similarity 0.42
 ```
 
+Layered public-data pipeline:
+
+```powershell
+python -m fraud_lens_gov backfill-bronze --source compras --start 2026-05-01 --end 2026-05-29 --window-days 29 --max-pages 1
+python -m fraud_lens_gov build-silver --source compras_gov
+python -m fraud_lens_gov build-golden --analyze --cluster
+```
+
+Run long Bronze/Silver/Golden jobs in the background and track progress in the dashboard:
+
+```powershell
+python -m fraud_lens_gov backfill-bronze --source both --async
+```
+
 Export an auditable alert package:
 
 ```powershell
@@ -69,6 +84,7 @@ The dashboard also exposes JSON endpoints for audit workflows:
 
 ```text
 GET /api/summary
+GET /api/pipeline
 GET /api/clusters/{cluster_id}
 GET /api/alerts/{alert_id}
 GET /api/items/{item_id}/neighbors
@@ -108,7 +124,13 @@ FraudLensGov is not meant to be tied to a single chat model. The intended AI lay
 PNCP / Compras.gov.br / Portais locais / Google discovery
         |
         v
-Ingestao + normalizacao dos itens
+Bronze Layer: payload bruto por fonte, janela e endpoint
+        |
+        v
+Silver Layer: normalizacao SQL + enriquecimento publico de item
+        |
+        v
+Golden Layer: dataset auditavel, metadados de qualidade e comparabilidade
         |
         v
 Base historica de precos por item, regiao, orgao, fornecedor e data

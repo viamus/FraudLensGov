@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .models import Alert, IngestionRun, ItemCluster, ItemClusterMember, ItemNeighbor, ProcurementItem, utc_now
+from .item_quality import description_quality
 from .normalization import stable_id
 
 
@@ -50,11 +51,61 @@ class Storage:
                     inserted_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS bronze_records (
+                    id TEXT PRIMARY KEY,
+                    source TEXT NOT NULL,
+                    source_record_id TEXT NOT NULL,
+                    procurement_id TEXT NOT NULL,
+                    item_number TEXT NOT NULL,
+                    record_date TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    parameters TEXT NOT NULL,
+                    silver_status TEXT NOT NULL,
+                    silver_error TEXT NOT NULL,
+                    collected_at TEXT NOT NULL
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_items_description_state
                     ON procurement_items(item_description, state);
 
                 CREATE INDEX IF NOT EXISTS idx_items_supplier
                     ON procurement_items(supplier_id, supplier_name);
+
+                CREATE INDEX IF NOT EXISTS idx_bronze_records_source_status
+                    ON bronze_records(source, silver_status, record_date);
+
+                CREATE INDEX IF NOT EXISTS idx_bronze_records_procurement
+                    ON bronze_records(procurement_id, item_number);
+
+                CREATE TABLE IF NOT EXISTS golden_items (
+                    item_id TEXT PRIMARY KEY,
+                    quality_level TEXT NOT NULL,
+                    comparable INTEGER NOT NULL,
+                    quality_reason TEXT NOT NULL,
+                    metadata TEXT NOT NULL,
+                    built_at TEXT NOT NULL,
+                    FOREIGN KEY(item_id) REFERENCES procurement_items(id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS pipeline_jobs (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    layer TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    current_step TEXT NOT NULL,
+                    steps_total INTEGER NOT NULL,
+                    steps_done INTEGER NOT NULL,
+                    progress REAL NOT NULL,
+                    message TEXT NOT NULL,
+                    error TEXT NOT NULL,
+                    parameters TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    finished_at TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_pipeline_jobs_status
+                    ON pipeline_jobs(status, started_at);
 
                 CREATE TABLE IF NOT EXISTS analysis_alerts (
                     id TEXT PRIMARY KEY,
@@ -133,12 +184,244 @@ class Storage:
                     :portal_url, :source_payload, :inserted_at
                 )
                 ON CONFLICT(id) DO UPDATE SET
+                    source = excluded.source,
+                    source_record_id = excluded.source_record_id,
+                    procurement_id = excluded.procurement_id,
+                    item_code = excluded.item_code,
+                    item_description = excluded.item_description,
+                    unit = excluded.unit,
+                    quantity = excluded.quantity,
+                    unit_price = excluded.unit_price,
+                    total_value = excluded.total_value,
+                    currency = excluded.currency,
+                    agency_name = excluded.agency_name,
+                    agency_id = excluded.agency_id,
+                    supplier_name = excluded.supplier_name,
+                    supplier_id = excluded.supplier_id,
+                    city = excluded.city,
+                    state = excluded.state,
+                    procurement_date = excluded.procurement_date,
+                    modality = excluded.modality,
+                    portal_url = excluded.portal_url,
                     source_payload = excluded.source_payload,
                     inserted_at = excluded.inserted_at
                 """,
                 [self._item_to_row(item) for item in rows],
             )
         return len(rows)
+
+    def upsert_bronze_records(
+        self,
+        source: str,
+        records: Iterable[dict[str, object]],
+        parameters: dict[str, object],
+    ) -> int:
+        rows = [self._bronze_record_to_row(source, record, parameters) for record in records]
+        with self.connect() as conn:
+            conn.executemany(
+                """
+                INSERT INTO bronze_records (
+                    id, source, source_record_id, procurement_id, item_number,
+                    record_date, payload, parameters, silver_status, silver_error, collected_at
+                )
+                VALUES (
+                    :id, :source, :source_record_id, :procurement_id, :item_number,
+                    :record_date, :payload, :parameters, :silver_status, :silver_error, :collected_at
+                )
+                ON CONFLICT(id) DO UPDATE SET
+                    payload = excluded.payload,
+                    parameters = excluded.parameters,
+                    silver_status = 'pending',
+                    silver_error = '',
+                    collected_at = excluded.collected_at
+                """,
+                rows,
+            )
+        return len(rows)
+
+    def bronze_records_for_silver(
+        self,
+        source: str = "both",
+        limit: int | None = None,
+        status: str = "pending",
+    ) -> list[dict[str, object]]:
+        params: list[object] = [status]
+        source_filter = ""
+        if source != "both":
+            source_filter = "AND source = ?"
+            params.append(source)
+        limit_clause = ""
+        if limit is not None:
+            limit_clause = "LIMIT ?"
+            params.append(limit)
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT * FROM bronze_records
+                WHERE silver_status = ?
+                {source_filter}
+                ORDER BY record_date ASC, collected_at ASC
+                {limit_clause}
+                """,
+                tuple(params),
+            ).fetchall()
+        return [self._bronze_row_to_dict(row) for row in rows]
+
+    def mark_bronze_silver_status(self, ids: Iterable[str], status: str, error: str = "") -> None:
+        rows = [(status, error, row_id) for row_id in ids]
+        if not rows:
+            return
+        with self.connect() as conn:
+            conn.executemany(
+                """
+                UPDATE bronze_records
+                SET silver_status = ?, silver_error = ?
+                WHERE id = ?
+                """,
+                rows,
+            )
+
+    def replace_golden_items(self, items: Iterable[ProcurementItem]) -> int:
+        rows = []
+        built_at = utc_now()
+        for item in items:
+            quality = description_quality(item)
+            rows.append(
+                {
+                    "item_id": item.id,
+                    "quality_level": str(quality.get("level") or "unknown"),
+                    "comparable": 1 if quality.get("comparable") else 0,
+                    "quality_reason": str(quality.get("reason") or ""),
+                    "metadata": json.dumps(quality, ensure_ascii=False, sort_keys=True),
+                    "built_at": built_at,
+                }
+            )
+        with self.connect() as conn:
+            conn.execute("DELETE FROM golden_items")
+            conn.executemany(
+                """
+                INSERT INTO golden_items (
+                    item_id, quality_level, comparable, quality_reason, metadata, built_at
+                )
+                VALUES (
+                    :item_id, :quality_level, :comparable, :quality_reason, :metadata, :built_at
+                )
+                """,
+                rows,
+            )
+        return len(rows)
+
+    def start_pipeline_job(
+        self,
+        name: str,
+        layer: str,
+        parameters: dict[str, object],
+        steps_total: int,
+        job_id: str | None = None,
+    ) -> str:
+        now = utc_now()
+        row = {
+            "id": job_id or stable_id("pipeline", name, layer, now, json.dumps(parameters, sort_keys=True)),
+            "name": name,
+            "layer": layer,
+            "status": "running",
+            "current_step": "",
+            "steps_total": max(steps_total, 1),
+            "steps_done": 0,
+            "progress": 0.0,
+            "message": "",
+            "error": "",
+            "parameters": json.dumps(parameters, ensure_ascii=False, sort_keys=True),
+            "started_at": now,
+            "updated_at": now,
+            "finished_at": "",
+        }
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO pipeline_jobs (
+                    id, name, layer, status, current_step, steps_total, steps_done,
+                    progress, message, error, parameters, started_at, updated_at, finished_at
+                )
+                VALUES (
+                    :id, :name, :layer, :status, :current_step, :steps_total, :steps_done,
+                    :progress, :message, :error, :parameters, :started_at, :updated_at, :finished_at
+                )
+                ON CONFLICT(id) DO UPDATE SET
+                    status = excluded.status,
+                    current_step = excluded.current_step,
+                    steps_total = excluded.steps_total,
+                    steps_done = excluded.steps_done,
+                    progress = excluded.progress,
+                    message = excluded.message,
+                    error = excluded.error,
+                    updated_at = excluded.updated_at,
+                    finished_at = ''
+                """,
+                row,
+            )
+        return str(row["id"])
+
+    def update_pipeline_job(
+        self,
+        job_id: str,
+        *,
+        current_step: str,
+        steps_done: int,
+        steps_total: int | None = None,
+        message: str = "",
+        status: str = "running",
+    ) -> None:
+        now = utc_now()
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT steps_total FROM pipeline_jobs WHERE id = ?",
+                (job_id,),
+            ).fetchone()
+            total = max(int(steps_total if steps_total is not None else (row["steps_total"] if row else 1)), 1)
+            done = max(0, min(steps_done, total))
+            progress = round((done / total) * 100, 2)
+            conn.execute(
+                """
+                UPDATE pipeline_jobs
+                SET status = ?, current_step = ?, steps_total = ?, steps_done = ?,
+                    progress = ?, message = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (status, current_step, total, done, progress, message, now, job_id),
+            )
+
+    def finish_pipeline_job(self, job_id: str, status: str = "success", error: str = "") -> None:
+        now = utc_now()
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT steps_total FROM pipeline_jobs WHERE id = ?",
+                (job_id,),
+            ).fetchone()
+            total = max(int(row["steps_total"] if row else 1), 1)
+            done = total if status == "success" else int(row["steps_done"] if row else 0)
+            progress = 100.0 if status == "success" else round((done / total) * 100, 2)
+            conn.execute(
+                """
+                UPDATE pipeline_jobs
+                SET status = ?, steps_done = ?, progress = ?, error = ?,
+                    updated_at = ?, finished_at = ?
+                WHERE id = ?
+                """,
+                (status, done, progress, error, now, now, job_id),
+            )
+
+    def list_pipeline_jobs(self, limit: int = 8) -> list[dict[str, object]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM pipeline_jobs
+                ORDER BY started_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [self._pipeline_job_summary(row) for row in rows]
 
     def list_items(self, limit: int | None = None) -> list[ProcurementItem]:
         sql = "SELECT * FROM procurement_items ORDER BY procurement_date DESC, total_value DESC"
@@ -319,7 +602,8 @@ class Storage:
                     i.supplier_id,
                     i.state,
                     i.procurement_date,
-                    i.portal_url
+                    i.portal_url,
+                    i.source_payload
                 FROM item_cluster_members m
                 JOIN procurement_items i ON i.id = m.item_id
                 WHERE m.cluster_id = ?
@@ -398,7 +682,8 @@ class Storage:
                     i.state,
                     i.procurement_date,
                     i.modality,
-                    i.portal_url
+                    i.portal_url,
+                    i.source_payload
                 FROM analysis_alerts a
                 JOIN procurement_items i ON i.id = a.item_id
                 WHERE a.id = ?
@@ -410,6 +695,7 @@ class Storage:
             detail = dict(row)
             detail["evidence"] = json.loads(str(detail["evidence"] or "{}"))
             detail["neighbors"] = self.item_neighbors(str(detail["item_id"]), limit=8)
+            detail["description_quality"] = self._description_quality_from_row(row)
             return detail
 
     def alert_export_rows(self, limit: int | None = None) -> list[dict[str, object]]:
@@ -490,7 +776,8 @@ class Storage:
             top_alerts = conn.execute(
                 """
                 SELECT a.*, i.item_description, i.agency_name, i.supplier_name, i.state,
-                       i.unit_price, i.total_value, i.procurement_date
+                       i.unit_price, i.total_value, i.procurement_date, i.item_code,
+                       i.unit, i.source_payload
                 FROM analysis_alerts a
                 JOIN procurement_items i ON i.id = a.item_id
                 ORDER BY a.severity DESC, a.score DESC
@@ -520,14 +807,42 @@ class Storage:
                 LIMIT 6
                 """
             ).fetchall()
+            bronze = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN silver_status = 'pending' THEN 1 ELSE 0 END) AS pending,
+                    SUM(CASE WHEN silver_status = 'silvered' THEN 1 ELSE 0 END) AS silvered,
+                    SUM(CASE WHEN silver_status = 'failed' THEN 1 ELSE 0 END) AS failed
+                FROM bronze_records
+                """
+            ).fetchone()
+            golden = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN comparable = 1 THEN 1 ELSE 0 END) AS comparable,
+                    SUM(CASE WHEN quality_level = 'generic' THEN 1 ELSE 0 END) AS generic,
+                    SUM(CASE WHEN quality_level = 'missing' THEN 1 ELSE 0 END) AS missing,
+                    SUM(CASE WHEN quality_level = 'weak' THEN 1 ELSE 0 END) AS weak,
+                    SUM(CASE WHEN quality_level = 'usable' THEN 1 ELSE 0 END) AS usable
+                FROM golden_items
+                """
+            ).fetchone()
         return {
             "totals": dict(totals),
             "alerts": dict(alerts),
             "risk_types": [dict(row) for row in risk_types],
-            "top_alerts": [dict(row) for row in top_alerts],
+            "top_alerts": [self._alert_summary(row) for row in top_alerts],
             "cluster_totals": dict(cluster_totals),
             "top_clusters": [self._cluster_summary(row) for row in top_clusters],
             "ingestion_runs": [self._ingestion_run_summary(row) for row in ingestion_runs],
+            "layers": {
+                "bronze": self._none_to_zero(dict(bronze)),
+                "silver": {"total": int(totals["items"] or 0)},
+                "golden": self._none_to_zero(dict(golden)),
+            },
+            "pipeline_jobs": self.list_pipeline_jobs(limit=6),
         }
 
     @staticmethod
@@ -589,3 +904,97 @@ class Storage:
         data = dict(row)
         data["parameters"] = json.loads(data["parameters"] or "{}")
         return data
+
+    @staticmethod
+    def _alert_summary(row: sqlite3.Row) -> dict[str, object]:
+        data = dict(row)
+        data["description_quality"] = Storage._description_quality_from_row(row)
+        data.pop("source_payload", None)
+        return data
+
+    @staticmethod
+    def _description_quality_from_row(row: sqlite3.Row) -> dict[str, object]:
+        data = dict(row)
+        payload = data.get("source_payload") or "{}"
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except json.JSONDecodeError:
+                payload = {}
+        item = ProcurementItem(
+            id=str(data.get("item_id") or data.get("id") or ""),
+            source=str(data.get("source") or ""),
+            source_record_id=str(data.get("source_record_id") or ""),
+            procurement_id=str(data.get("procurement_id") or ""),
+            item_code=str(data.get("item_code") or ""),
+            item_description=str(data.get("item_description") or ""),
+            unit=str(data.get("unit") or ""),
+            quantity=float(data.get("quantity") or 0),
+            unit_price=float(data.get("unit_price") or 0),
+            total_value=float(data.get("total_value") or 0),
+            currency=str(data.get("currency") or "BRL"),
+            agency_name=str(data.get("agency_name") or ""),
+            agency_id=str(data.get("agency_id") or ""),
+            supplier_name=str(data.get("supplier_name") or ""),
+            supplier_id=str(data.get("supplier_id") or ""),
+            city=str(data.get("city") or ""),
+            state=str(data.get("state") or ""),
+            procurement_date=str(data.get("procurement_date") or ""),
+            modality=str(data.get("modality") or ""),
+            portal_url=str(data.get("portal_url") or ""),
+            source_payload=payload if isinstance(payload, dict) else {},
+        )
+        return description_quality(item)
+
+    @staticmethod
+    def _bronze_record_to_row(
+        source: str,
+        record: dict[str, object],
+        parameters: dict[str, object],
+    ) -> dict[str, object]:
+        source_record_id = ""
+        procurement_id = ""
+        item_number = ""
+        record_date = ""
+        if source == "pncp":
+            source_record_id = str(record.get("numeroControlePNCP") or stable_id(record))
+            procurement_id = source_record_id
+            item_number = str(record.get("numeroCompra") or "")
+            record_date = str(record.get("dataPublicacaoPncp") or record.get("dataInclusao") or "")[:10]
+        elif source == "compras_gov":
+            source_record_id = str(record.get("idCompraItem") or record.get("idContratacaoPNCP") or stable_id(record))
+            procurement_id = str(record.get("idContratacaoPNCP") or record.get("idCompra") or "")
+            item_number = str(record.get("numeroItemPncp") or record.get("idCompraItem") or "")
+            record_date = str(record.get("dataResultadoPncp") or record.get("dataInclusaoPncp") or "")[:10]
+        else:
+            source_record_id = stable_id(record)
+        return {
+            "id": stable_id("bronze", source, source_record_id),
+            "source": source,
+            "source_record_id": source_record_id,
+            "procurement_id": procurement_id,
+            "item_number": item_number,
+            "record_date": record_date,
+            "payload": json.dumps(record, ensure_ascii=False, sort_keys=True),
+            "parameters": json.dumps(parameters, ensure_ascii=False, sort_keys=True),
+            "silver_status": "pending",
+            "silver_error": "",
+            "collected_at": utc_now(),
+        }
+
+    @staticmethod
+    def _bronze_row_to_dict(row: sqlite3.Row) -> dict[str, object]:
+        data = dict(row)
+        data["payload"] = json.loads(data["payload"] or "{}")
+        data["parameters"] = json.loads(data["parameters"] or "{}")
+        return data
+
+    @staticmethod
+    def _pipeline_job_summary(row: sqlite3.Row) -> dict[str, object]:
+        data = dict(row)
+        data["parameters"] = json.loads(data["parameters"] or "{}")
+        return data
+
+    @staticmethod
+    def _none_to_zero(data: dict[str, object]) -> dict[str, object]:
+        return {key: (0 if value is None else value) for key, value in data.items()}

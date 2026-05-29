@@ -5,6 +5,7 @@ from statistics import median
 import re
 
 from .models import Alert, ProcurementItem
+from .item_quality import is_comparable
 from .normalization import stable_id
 
 
@@ -35,7 +36,7 @@ def analyze_items(items: list[ProcurementItem]) -> list[Alert]:
 
 def _price_outliers(items: list[ProcurementItem]) -> list[Alert]:
     alerts: list[Alert] = []
-    priced_items = [item for item in items if item.unit_price > 0]
+    priced_items = [item for item in items if item.unit_price > 0 and is_comparable(item)]
     for item in priced_items:
         neighbors = _nearest_price_neighbors(item, priced_items)
         if len(neighbors) < 3:
@@ -93,6 +94,8 @@ def _nearest_price_neighbors(
     for candidate in candidates:
         if candidate.id == item.id:
             continue
+        if not is_comparable(candidate):
+            continue
         similarity = _item_similarity(item, candidate)
         if similarity >= min_similarity:
             scored.append((candidate, similarity))
@@ -123,6 +126,8 @@ def _tokens(text: str) -> set[str]:
 def _supplier_concentration(items: list[ProcurementItem]) -> list[Alert]:
     grouped: dict[tuple[str, str], list[ProcurementItem]] = defaultdict(list)
     for item in items:
+        if not is_comparable(item):
+            continue
         if item.supplier_id or item.supplier_name:
             grouped[(item.agency_id or item.agency_name, item.item_description)].append(item)
 
@@ -165,6 +170,8 @@ def _supplier_concentration(items: list[ProcurementItem]) -> list[Alert]:
 def _fragmented_purchases(items: list[ProcurementItem]) -> list[Alert]:
     grouped: dict[tuple[str, str, str], list[ProcurementItem]] = defaultdict(list)
     for item in items:
+        if not is_comparable(item):
+            continue
         month = item.procurement_date[:7]
         if month:
             grouped[(item.agency_id or item.agency_name, item.item_description, month)].append(item)

@@ -4,6 +4,7 @@ import re
 from collections import Counter, defaultdict
 
 from .models import ItemCluster, ItemClusterMember, ItemNeighbor, ProcurementItem
+from .item_quality import is_comparable
 from .normalization import stable_id
 
 
@@ -40,7 +41,7 @@ def build_cluster_index(
     k: int = 8,
     min_similarity: float = 0.42,
 ) -> tuple[list[ItemCluster], list[ItemClusterMember], list[ItemNeighbor]]:
-    comparable = [item for item in items if _tokens(item.item_description)]
+    comparable = [item for item in items if is_comparable(item) and _tokens(item.item_description)]
     neighbor_map = nearest_neighbors(comparable, k=k, min_similarity=min_similarity)
     graph: dict[str, set[str]] = {item.id: set() for item in comparable}
     by_id = {item.id: item for item in comparable}
