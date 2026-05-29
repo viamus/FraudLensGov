@@ -8,6 +8,19 @@
       </div>
     </div>
   </div>
+  <form class="table-controls" method="get" action="{{ current_path }}">
+    <input type="search" name="runs_q" value="{{ run_table.filters.q }}" placeholder="Buscar fonte, parâmetros ou erro">
+    <select name="runs_status" aria-label="Status da ingestão">
+      <option value="">Todos status</option>
+      <option value="running" {% if run_table.filters.status == "running" %}selected{% endif %}>Running</option>
+      <option value="success" {% if run_table.filters.status == "success" %}selected{% endif %}>Success</option>
+      <option value="partial" {% if run_table.filters.status == "partial" %}selected{% endif %}>Partial</option>
+      <option value="failed" {% if run_table.filters.status == "failed" %}selected{% endif %}>Failed</option>
+    </select>
+    <input type="search" name="runs_source" value="{{ run_table.filters.source }}" placeholder="Fonte">
+    <button class="button primary" type="submit">Filtrar</button>
+    <a class="button ghost" href="{{ current_path }}">Limpar</a>
+  </form>
   <div class="table-scroll">
     <div class="data-table runs-table" role="table" aria-label="Execuções recentes">
       <div class="table-row table-head-row" role="row">
@@ -16,7 +29,7 @@
         <span>Lidos</span>
         <span>Gravados</span>
       </div>
-      {% for run in ingestion_runs %}
+      {% for run in run_table.rows %}
         <div class="table-row" role="row">
           <strong>{{ run.source }}</strong>
           <span class="badge {{ run.status_tone }}">{{ run.status }}</span>
@@ -28,4 +41,5 @@
       {% endfor %}
     </div>
   </div>
+  {% include "audit_ui/partials/pagination.html" with table=run_table %}
 </article>

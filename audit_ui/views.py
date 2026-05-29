@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from math import ceil
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.http import Http404, JsonResponse
@@ -41,8 +43,9 @@ def operation_page(request):
 
 
 def _render_dashboard(request, active_page: str):
-    summary = _storage().dashboard_summary()
-    return render(request, "audit_ui/dashboard.html", _dashboard_context(summary, active_page))
+    storage = _storage()
+    summary = storage.dashboard_summary()
+    return render(request, "audit_ui/dashboard.html", _dashboard_context(summary, active_page, request.GET, storage))
 
 
 def summary_api(request):
@@ -97,7 +100,12 @@ def _json(payload: dict[str, Any]) -> JsonResponse:
     return JsonResponse(payload, json_dumps_params={"ensure_ascii": False, "indent": 2})
 
 
-def _dashboard_context(summary: dict[str, Any], active_page: str = "overview") -> dict[str, Any]:
+def _dashboard_context(
+    summary: dict[str, Any],
+    active_page: str,
+    query: Any,
+    storage: Storage,
+) -> dict[str, Any]:
     totals = _dict(summary.get("totals"))
     alerts = _dict(summary.get("alerts"))
     category_totals = _dict(summary.get("category_totals"))
@@ -109,13 +117,19 @@ def _dashboard_context(summary: dict[str, Any], active_page: str = "overview") -
     knn_review = _dict(summary.get("knn_review"))
     pairs = _as_list(knn_review.get("pairs"))
     blocked = _as_list(knn_review.get("blocked"))
-    jobs = [_job_view(row) for row in _as_list(summary.get("pipeline_jobs"))]
-    clusters = [_cluster_view(row) for row in _as_list(summary.get("top_clusters"))]
-    categories = [_category_view(row) for row in _as_list(summary.get("top_categories"))]
+    alert_table = _alert_table(storage, query, page_size=5 if active_page == "overview" else 12)
+    job_table = _job_table(storage, query, page_size=3 if active_page == "overview" else 8)
+    run_table = _run_table(storage, query, page_size=8)
+    category_table = _category_table(storage, query, page_size=8)
+    cluster_table = _cluster_table(storage, query, page_size=8)
+    knn_table = _knn_table(storage, query, page_size=8)
+    jobs = job_table["rows"]
+    clusters = cluster_table["rows"]
+    categories = category_table["rows"]
     risk_types = [_risk_type_view(row) for row in _as_list(summary.get("risk_types"))]
-    top_alerts = [_alert_view(row) for row in _as_list(summary.get("top_alerts"))]
-    ingestion_runs = [_run_view(row) for row in _as_list(summary.get("ingestion_runs"))]
-    knn_pairs = [_knn_pair_view(row) for row in pairs]
+    top_alerts = alert_table["rows"]
+    ingestion_runs = run_table["rows"]
+    knn_pairs = knn_table["rows"]
     comparable = _int(golden.get("comparable"))
     blocked_total = (
         _int(golden.get("missing"))
@@ -132,13 +146,14 @@ def _dashboard_context(summary: dict[str, Any], active_page: str = "overview") -
         "active_page": active_page,
         "page_title": page_copy["title"],
         "page_subtitle": page_copy["subtitle"],
+        "current_path": _page_path(active_page),
         "nav_items": _nav_items(active_page),
         "posture": _risk_posture(alerts),
         "metrics": [
             {"label": "Silver total", "value": _int(silver.get("total")), "note": "registros normalizados"},
             {"label": "Comparáveis", "value": comparable, "note": "aptos para benchmark"},
             {"label": "Fora do KNN", "value": blocked_total + scope_total, "note": f"{scope_total} objetos PNCP"},
-            {"label": "Pares KNN", "value": len(pairs), "note": f"{_int(cluster_totals.get('neighbor_edges'))} arestas"},
+            {"label": "Pares KNN", "value": _int(knn_table["page"]["total"]), "note": f"{_int(cluster_totals.get('neighbor_edges'))} arestas"},
             {"label": "Alertas", "value": _int(alerts.get("alerts")), "note": "estatísticos ativos"},
             {"label": "Valor bruto", "value": _compact_money(totals.get("total_value")), "note": "inclui escopos PNCP"},
         ],
@@ -166,10 +181,16 @@ def _dashboard_context(summary: dict[str, Any], active_page: str = "overview") -
             "needs_rag": _int(category_totals.get("needs_rag")),
         },
         "categories": categories,
+        "alert_table": alert_table,
+        "job_table": job_table,
+        "run_table": run_table,
+        "category_table": category_table,
+        "cluster_table": cluster_table,
+        "knn_table": knn_table,
         "knn_pairs": knn_pairs,
-        "visible_alerts": top_alerts[:5] if active_page == "overview" else top_alerts[:12],
-        "visible_jobs": jobs[:3] if active_page == "overview" else jobs[:8],
-        "visible_knn_pairs": knn_pairs[:8],
+        "visible_alerts": top_alerts,
+        "visible_jobs": jobs,
+        "visible_knn_pairs": knn_pairs,
         "blocked_items": [_blocked_view(row) for row in blocked],
         "jobs": jobs,
         "clusters": clusters,
@@ -214,6 +235,141 @@ def _alert_detail_context(summary: dict[str, Any], detail: dict[str, Any]) -> di
     }
 
 
+def _alert_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]:
+    prefix = "alerts"
+    page = _query_page(query, prefix)
+    filters = {
+        "q": _query_value(query, f"{prefix}_q"),
+        "risk_type": _query_value(query, f"{prefix}_risk_type"),
+        "severity": _query_value(query, f"{prefix}_severity"),
+    }
+    result, page, total = _clamped_paginated_result(storage.paginated_alert_rows, page, page_size, filters)
+    return {
+        "rows": [_alert_view(row) for row in _as_list(result.get("rows"))],
+        "filters": filters,
+        "page": _page_meta(query, prefix, page, page_size, total),
+    }
+
+
+def _job_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]:
+    prefix = "jobs"
+    page = _query_page(query, prefix)
+    filters = {
+        "q": _query_value(query, f"{prefix}_q"),
+        "status": _query_value(query, f"{prefix}_status"),
+        "layer": _query_value(query, f"{prefix}_layer"),
+    }
+    result, page, total = _clamped_paginated_result(storage.paginated_pipeline_jobs, page, page_size, filters)
+    return {
+        "rows": [_job_view(row) for row in _as_list(result.get("rows"))],
+        "filters": filters,
+        "page": _page_meta(query, prefix, page, page_size, total),
+    }
+
+
+def _run_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]:
+    prefix = "runs"
+    page = _query_page(query, prefix)
+    filters = {
+        "q": _query_value(query, f"{prefix}_q"),
+        "status": _query_value(query, f"{prefix}_status"),
+        "source": _query_value(query, f"{prefix}_source"),
+    }
+    result, page, total = _clamped_paginated_result(storage.paginated_ingestion_runs, page, page_size, filters)
+    return {
+        "rows": [_run_view(row) for row in _as_list(result.get("rows"))],
+        "filters": filters,
+        "page": _page_meta(query, prefix, page, page_size, total),
+    }
+
+
+def _category_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]:
+    prefix = "categories"
+    page = _query_page(query, prefix)
+    filters = {
+        "q": _query_value(query, f"{prefix}_q"),
+        "needs_rag": _query_value(query, f"{prefix}_needs_rag"),
+    }
+    result, page, total = _clamped_paginated_result(storage.paginated_item_categories, page, page_size, filters)
+    return {
+        "rows": [_category_view(row) for row in _as_list(result.get("rows"))],
+        "filters": filters,
+        "page": _page_meta(query, prefix, page, page_size, total),
+    }
+
+
+def _cluster_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]:
+    prefix = "clusters"
+    page = _query_page(query, prefix)
+    filters = {"q": _query_value(query, f"{prefix}_q")}
+    result, page, total = _clamped_paginated_result(storage.paginated_item_clusters, page, page_size, filters)
+    return {
+        "rows": [_cluster_view(row) for row in _as_list(result.get("rows"))],
+        "filters": filters,
+        "page": _page_meta(query, prefix, page, page_size, total),
+    }
+
+
+def _knn_table(storage: Storage, query: Any, page_size: int) -> dict[str, Any]:
+    prefix = "knn"
+    page = _query_page(query, prefix)
+    filters = {"q": _query_value(query, f"{prefix}_q")}
+    result, page, total = _clamped_paginated_result(storage.paginated_knn_review_queue, page, page_size, filters)
+    return {
+        "rows": [_knn_pair_view(row) for row in _as_list(result.get("rows"))],
+        "filters": filters,
+        "page": _page_meta(query, prefix, page, page_size, total),
+    }
+
+
+def _query_value(query: Any, key: str) -> str:
+    value = query.get(key, "") if hasattr(query, "get") else ""
+    return str(value or "").strip()
+
+
+def _query_page(query: Any, prefix: str) -> int:
+    try:
+        return max(1, int(_query_value(query, f"{prefix}_page") or "1"))
+    except ValueError:
+        return 1
+
+
+def _clamped_paginated_result(fetch: Any, page: int, page_size: int, filters: dict[str, str]) -> tuple[dict[str, Any], int, int]:
+    result = fetch(page=page, page_size=page_size, **filters)
+    total = _int(result.get("total"))
+    total_pages = max(1, ceil(total / page_size)) if total else 1
+    current = min(max(page, 1), total_pages)
+    if current != page:
+        result = fetch(page=current, page_size=page_size, **filters)
+    return result, current, total
+
+
+def _page_meta(query: Any, prefix: str, page: int, page_size: int, total: int) -> dict[str, Any]:
+    total_pages = max(1, ceil(total / page_size)) if total else 1
+    current = min(max(page, 1), total_pages)
+    first = ((current - 1) * page_size) + 1 if total else 0
+    last = min(current * page_size, total)
+    return {
+        "prefix": prefix,
+        "current": current,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+        "first": first,
+        "last": last,
+        "has_previous": current > 1,
+        "has_next": current < total_pages,
+        "previous_url": _page_url(query, prefix, current - 1) if current > 1 else "",
+        "next_url": _page_url(query, prefix, current + 1) if current < total_pages else "",
+    }
+
+
+def _page_url(query: Any, prefix: str, page: int) -> str:
+    params = {str(key): str(value) for key, value in getattr(query, "items", lambda: [])() if value not in {"", None}}
+    params[f"{prefix}_page"] = str(page)
+    return f"?{urlencode(params)}"
+
+
 def _page_copy(active_page: str) -> dict[str, str]:
     pages = {
         "overview": {
@@ -238,6 +394,17 @@ def _page_copy(active_page: str) -> dict[str, str]:
         },
     }
     return pages.get(active_page, pages["overview"])
+
+
+def _page_path(active_page: str) -> str:
+    paths = {
+        "overview": "/",
+        "pipeline": "/pipeline",
+        "investigacao": "/investigacao",
+        "normalizacao": "/normalizacao",
+        "operacao": "/operacao",
+    }
+    return paths.get(active_page, "/")
 
 
 def _nav_items(active_page: str) -> list[dict[str, str]]:

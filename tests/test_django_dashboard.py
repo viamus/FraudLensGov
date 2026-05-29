@@ -88,3 +88,42 @@ def test_django_alert_detail_page_explains_outlier(tmp_path: Path):
     assert "Vizinhos usados no cálculo" in html
     assert "Leitura auditável" in html
     assert "Preço normalizado" in html
+
+
+def test_django_tables_render_filters_and_pagination(tmp_path: Path):
+    db_path = tmp_path / "fraudlens.sqlite"
+    _seed_dashboard_db(db_path)
+
+    with override_settings(FRAUDLENS_DB=str(db_path)):
+        investigation = Client().get("/investigacao", {"alerts_q": "notebook", "alerts_risk_type": "price_outlier"})
+        normalization = Client().get("/normalizacao")
+        operation = Client().get("/operacao")
+
+    assert investigation.status_code == 200
+    investigation_html = investigation.content.decode("utf-8")
+    assert 'name="alerts_q"' in investigation_html
+    assert "table-pagination" in investigation_html
+    assert "notebook" in investigation_html
+
+    assert normalization.status_code == 200
+    normalization_html = normalization.content.decode("utf-8")
+    assert 'name="categories_q"' in normalization_html
+    assert 'name="clusters_q"' in normalization_html
+
+    assert operation.status_code == 200
+    operation_html = operation.content.decode("utf-8")
+    assert 'name="jobs_q"' in operation_html
+    assert 'name="runs_q"' in operation_html
+
+
+def test_django_table_page_overflow_uses_last_available_page(tmp_path: Path):
+    db_path = tmp_path / "fraudlens.sqlite"
+    _seed_dashboard_db(db_path)
+
+    with override_settings(FRAUDLENS_DB=str(db_path)):
+        response = Client().get("/investigacao", {"alerts_page": "999"})
+
+    assert response.status_code == 200
+    html = response.content.decode("utf-8")
+    assert "Sem alerta estat" not in html
+    assert "999 /" not in html

@@ -1,0 +1,22 @@
+<div class="table-pagination">
+  <span>
+    {% if table.page.total %}
+      {{ table.page.first }}-{{ table.page.last }} de {{ table.page.total }}
+    {% else %}
+      0 registros
+    {% endif %}
+  </span>
+  <div>
+    {% if table.page.has_previous %}
+      <a class="button ghost" href="{{ table.page.previous_url }}">Anterior</a>
+    {% else %}
+      <span class="button ghost disabled">Anterior</span>
+    {% endif %}
+    <span class="page-count">{{ table.page.current }} / {{ table.page.total_pages }}</span>
+    {% if table.page.has_next %}
+      <a class="button ghost" href="{{ table.page.next_url }}">Próxima</a>
+    {% else %}
+      <span class="button ghost disabled">Próxima</span>
+    {% endif %}
+  </div>
+</div>

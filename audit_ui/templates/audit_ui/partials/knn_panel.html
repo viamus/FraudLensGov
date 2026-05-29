@@ -9,6 +9,11 @@
     </div>
     <a class="button secondary" href="/api/knn-review">API</a>
   </div>
+  <form class="table-controls" method="get" action="{{ current_path }}">
+    <input type="search" name="knn_q" value="{{ knn_table.filters.q }}" placeholder="Buscar item, vizinho, unidade ou UF">
+    <button class="button primary" type="submit">Filtrar</button>
+    <a class="button ghost" href="{{ current_path }}">Limpar</a>
+  </form>
   <div class="table-scroll">
     <div class="data-table knn-table" role="table" aria-label="Pares KNN para revisão">
       <div class="table-row table-head-row" role="row">
@@ -18,7 +23,7 @@
         <span>Preço normalizado</span>
         <span>Diferença</span>
       </div>
-      {% for pair in visible_knn_pairs %}
+      {% for pair in knn_table.rows %}
         <div class="table-row" role="row">
           <strong>{{ pair.item_description }}</strong>
           <span>{{ pair.neighbor_description }}</span>
@@ -31,4 +36,5 @@
       {% endfor %}
     </div>
   </div>
+  {% include "audit_ui/partials/pagination.html" with table=knn_table %}
 </article>

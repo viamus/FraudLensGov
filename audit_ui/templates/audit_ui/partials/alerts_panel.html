@@ -9,6 +9,23 @@
     </div>
     <a class="button secondary" href="/api/summary">API</a>
   </div>
+  <form class="table-controls" method="get" action="{{ current_path }}">
+    <input type="search" name="alerts_q" value="{{ alert_table.filters.q }}" placeholder="Buscar item, órgão ou fornecedor">
+    <select name="alerts_risk_type" aria-label="Tipo de risco">
+      <option value="">Todos os riscos</option>
+      <option value="price_outlier" {% if alert_table.filters.risk_type == "price_outlier" %}selected{% endif %}>Preço fora da curva</option>
+      <option value="supplier_concentration" {% if alert_table.filters.risk_type == "supplier_concentration" %}selected{% endif %}>Fornecedor recorrente</option>
+      <option value="fragmented_purchase" {% if alert_table.filters.risk_type == "fragmented_purchase" %}selected{% endif %}>Possível fracionamento</option>
+    </select>
+    <select name="alerts_severity" aria-label="Severidade">
+      <option value="">Todas severidades</option>
+      <option value="3" {% if alert_table.filters.severity == "3" %}selected{% endif %}>S3</option>
+      <option value="2" {% if alert_table.filters.severity == "2" %}selected{% endif %}>S2</option>
+      <option value="1" {% if alert_table.filters.severity == "1" %}selected{% endif %}>S1</option>
+    </select>
+    <button class="button primary" type="submit">Filtrar</button>
+    <a class="button ghost" href="{{ current_path }}">Limpar</a>
+  </form>
   <div class="table-scroll">
     <div class="data-table alerts-table" role="table" aria-label="Fila estatística">
       <div class="table-row table-head-row" role="row">
@@ -19,7 +36,7 @@
         <span>Qualidade</span>
         <span>Ação</span>
       </div>
-      {% for alert in visible_alerts %}
+      {% for alert in alert_table.rows %}
         <div class="table-row" role="row">
           <span class="severity">S{{ alert.severity }}</span>
           <div class="primary-cell">
@@ -36,4 +53,5 @@
       {% endfor %}
     </div>
   </div>
+  {% include "audit_ui/partials/pagination.html" with table=alert_table %}
 </article>

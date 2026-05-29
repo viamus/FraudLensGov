@@ -17,7 +17,7 @@ The current prototype uses a small, pinned Python stack:
 - Unit-aware Golden comparability rules: mass/volume normalization, broad-scope blocking, and specification-required item families.
 - Optional OpenAI Responses API explanations.
 - Django 5.2 LTS dashboard with a dark operational audit UI.
-- Corporate audit shell with collapsible navigation, table-first investigation views, and alert detail pages.
+- Corporate audit shell with collapsible navigation, paginated table-first investigation views, filters, and alert detail pages.
 - Legacy standard-library dashboard still available with `--legacy-webapp`.
 
 ## Run Locally

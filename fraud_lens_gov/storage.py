@@ -493,6 +493,42 @@ class Storage:
             ).fetchall()
         return [self._pipeline_job_summary(row) for row in rows]
 
+    def paginated_pipeline_jobs(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 10,
+        q: str = "",
+        status: str = "",
+        layer: str = "",
+    ) -> dict[str, object]:
+        where = []
+        params: list[object] = []
+        if q:
+            where.append("(LOWER(name) LIKE ? OR LOWER(current_step) LIKE ? OR LOWER(message) LIKE ?)")
+            term = f"%{q.lower()}%"
+            params.extend([term, term, term])
+        if status:
+            where.append("status = ?")
+            params.append(status)
+        if layer:
+            where.append("layer = ?")
+            params.append(layer)
+        where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+        offset = (max(page, 1) - 1) * page_size
+        with self.connect() as conn:
+            total = int(conn.execute(f"SELECT COUNT(*) FROM pipeline_jobs {where_sql}", params).fetchone()[0])
+            rows = conn.execute(
+                f"""
+                SELECT * FROM pipeline_jobs
+                {where_sql}
+                ORDER BY started_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, page_size, offset],
+            ).fetchall()
+        return {"rows": [self._pipeline_job_summary(row) for row in rows], "total": total}
+
     def list_items(self, limit: int | None = None) -> list[ProcurementItem]:
         sql = "SELECT * FROM procurement_items ORDER BY procurement_date DESC, total_value DESC"
         params: tuple[int, ...] = ()
@@ -561,6 +597,42 @@ class Storage:
             ).fetchall()
         return [self._row_to_ingestion_run(row) for row in rows]
 
+    def paginated_ingestion_runs(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 10,
+        q: str = "",
+        status: str = "",
+        source: str = "",
+    ) -> dict[str, object]:
+        where = []
+        params: list[object] = []
+        if q:
+            where.append("(LOWER(source) LIKE ? OR LOWER(parameters) LIKE ? OR LOWER(error) LIKE ?)")
+            term = f"%{q.lower()}%"
+            params.extend([term, term, term])
+        if status:
+            where.append("status = ?")
+            params.append(status)
+        if source:
+            where.append("source = ?")
+            params.append(source)
+        where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+        offset = (max(page, 1) - 1) * page_size
+        with self.connect() as conn:
+            total = int(conn.execute(f"SELECT COUNT(*) FROM ingestion_runs {where_sql}", params).fetchone()[0])
+            rows = conn.execute(
+                f"""
+                SELECT * FROM ingestion_runs
+                {where_sql}
+                ORDER BY started_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, page_size, offset],
+            ).fetchall()
+        return {"rows": [self._ingestion_run_summary(row) for row in rows], "total": total}
+
     def replace_alerts(self, alerts: Iterable[Alert]) -> None:
         rows = list(alerts)
         with self.connect() as conn:
@@ -587,6 +659,59 @@ class Storage:
             params = (limit,)
         with self.connect() as conn:
             return [self._row_to_alert(row) for row in conn.execute(sql, params).fetchall()]
+
+    def paginated_alert_rows(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 10,
+        q: str = "",
+        risk_type: str = "",
+        severity: str = "",
+    ) -> dict[str, object]:
+        where = []
+        params: list[object] = []
+        if q:
+            where.append(
+                """
+                (
+                    LOWER(a.title) LIKE ?
+                    OR LOWER(a.risk_type) LIKE ?
+                    OR LOWER(i.item_description) LIKE ?
+                    OR LOWER(i.agency_name) LIKE ?
+                    OR LOWER(i.supplier_name) LIKE ?
+                )
+                """
+            )
+            term = f"%{q.lower()}%"
+            params.extend([term, term, term, term, term])
+        if risk_type:
+            where.append("a.risk_type = ?")
+            params.append(risk_type)
+        if severity:
+            where.append("CAST(a.severity AS TEXT) = ?")
+            params.append(severity)
+        where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+        offset = (max(page, 1) - 1) * page_size
+        base_join = """
+            FROM analysis_alerts a
+            JOIN procurement_items i ON i.id = a.item_id
+        """
+        with self.connect() as conn:
+            total = int(conn.execute(f"SELECT COUNT(*) {base_join} {where_sql}", params).fetchone()[0])
+            rows = conn.execute(
+                f"""
+                SELECT a.*, i.item_description, i.agency_name, i.supplier_name, i.state,
+                       i.unit_price, i.total_value, i.procurement_date, i.item_code,
+                       i.unit, i.source_payload
+                {base_join}
+                {where_sql}
+                ORDER BY a.severity DESC, a.score DESC, a.created_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, page_size, offset],
+            ).fetchall()
+        return {"rows": [self._alert_summary(row) for row in rows], "total": total}
 
     def update_alert_explanations(self, alerts: Iterable[Alert]) -> None:
         with self.connect() as conn:
@@ -670,6 +795,77 @@ class Storage:
                 (limit,),
             ).fetchall()
         return [self._row_to_cluster(row) for row in rows]
+
+    def paginated_item_clusters(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 10,
+        q: str = "",
+    ) -> dict[str, object]:
+        where = []
+        params: list[object] = []
+        if q:
+            where.append("(LOWER(label) LIKE ? OR LOWER(states) LIKE ?)")
+            term = f"%{q.lower()}%"
+            params.extend([term, term])
+        where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+        offset = (max(page, 1) - 1) * page_size
+        with self.connect() as conn:
+            total = int(conn.execute(f"SELECT COUNT(*) FROM item_clusters {where_sql}", params).fetchone()[0])
+            rows = conn.execute(
+                f"""
+                SELECT * FROM item_clusters
+                {where_sql}
+                ORDER BY item_count DESC, total_value DESC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, page_size, offset],
+            ).fetchall()
+        return {"rows": [self._cluster_summary(row) for row in rows], "total": total}
+
+    def paginated_item_categories(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 10,
+        q: str = "",
+        needs_rag: str = "",
+    ) -> dict[str, object]:
+        where = []
+        params: list[object] = []
+        if q:
+            where.append("(LOWER(category) LIKE ? OR LOWER(canonical_name) LIKE ?)")
+            term = f"%{q.lower()}%"
+            params.extend([term, term])
+        if needs_rag == "1":
+            where.append("evidence LIKE '%\"needs_rag\": true%'")
+        elif needs_rag == "0":
+            where.append("evidence NOT LIKE '%\"needs_rag\": true%'")
+        where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+        offset = (max(page, 1) - 1) * page_size
+        aggregate_sql = f"""
+            SELECT
+                category,
+                COUNT(*) AS item_count,
+                ROUND(AVG(confidence), 4) AS avg_confidence,
+                SUM(CASE WHEN evidence LIKE '%"needs_rag": true%' THEN 1 ELSE 0 END) AS needs_rag
+            FROM item_category_suggestions
+            {where_sql}
+            GROUP BY category
+        """
+        with self.connect() as conn:
+            total = int(conn.execute(f"SELECT COUNT(*) FROM ({aggregate_sql})", params).fetchone()[0])
+            rows = conn.execute(
+                f"""
+                SELECT *
+                FROM ({aggregate_sql})
+                ORDER BY item_count DESC, avg_confidence DESC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, page_size, offset],
+            ).fetchall()
+        return {"rows": [self._category_summary(row) for row in rows], "total": total}
 
     def cluster_detail(self, cluster_id: str) -> dict[str, object] | None:
         with self.connect() as conn:
@@ -805,6 +1001,30 @@ class Storage:
             key=lambda row: (row["similarity"], row["price_ratio"], row["price_delta"]),
             reverse=True,
         )[:limit]
+
+    def paginated_knn_review_queue(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 10,
+        q: str = "",
+    ) -> dict[str, object]:
+        rows = self.knn_review_queue(limit=5000)
+        if q:
+            term = q.lower()
+            rows = [
+                row
+                for row in rows
+                if term in str(row.get("item_description") or "").lower()
+                or term in str(row.get("neighbor_description") or "").lower()
+                or term in str(row.get("unit") or "").lower()
+                or term in str(row.get("neighbor_unit") or "").lower()
+                or term in str(row.get("state") or "").lower()
+                or term in str(row.get("neighbor_state") or "").lower()
+            ]
+        total = len(rows)
+        offset = (max(page, 1) - 1) * page_size
+        return {"rows": rows[offset : offset + page_size], "total": total}
 
     def knn_blocked_items(self, limit: int = 20) -> list[dict[str, object]]:
         with self.connect() as conn:

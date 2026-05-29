@@ -8,6 +8,24 @@
       </div>
     </div>
   </div>
+  <form class="table-controls" method="get" action="{{ current_path }}">
+    <input type="search" name="jobs_q" value="{{ job_table.filters.q }}" placeholder="Buscar job, etapa ou mensagem">
+    <select name="jobs_status" aria-label="Status do job">
+      <option value="">Todos status</option>
+      <option value="running" {% if job_table.filters.status == "running" %}selected{% endif %}>Running</option>
+      <option value="success" {% if job_table.filters.status == "success" %}selected{% endif %}>Success</option>
+      <option value="partial" {% if job_table.filters.status == "partial" %}selected{% endif %}>Partial</option>
+      <option value="failed" {% if job_table.filters.status == "failed" %}selected{% endif %}>Failed</option>
+    </select>
+    <select name="jobs_layer" aria-label="Camada do job">
+      <option value="">Todas camadas</option>
+      <option value="bronze" {% if job_table.filters.layer == "bronze" %}selected{% endif %}>Bronze</option>
+      <option value="silver" {% if job_table.filters.layer == "silver" %}selected{% endif %}>Silver</option>
+      <option value="golden" {% if job_table.filters.layer == "golden" %}selected{% endif %}>Golden</option>
+    </select>
+    <button class="button primary" type="submit">Filtrar</button>
+    <a class="button ghost" href="{{ current_path }}">Limpar</a>
+  </form>
   <div class="table-scroll">
     <div class="data-table jobs-table" role="table" aria-label="Jobs de processamento">
       <div class="table-row table-head-row" role="row">
@@ -17,7 +35,7 @@
         <span>Progresso</span>
         <span>Mensagem</span>
       </div>
-      {% for job in visible_jobs %}
+      {% for job in job_table.rows %}
         <div class="table-row" role="row">
           <strong>{{ job.name }}</strong>
           <span>{{ job.layer }} / {{ job.current_step }}</span>
@@ -33,4 +51,5 @@
       {% endfor %}
     </div>
   </div>
+  {% include "audit_ui/partials/pagination.html" with table=job_table %}
 </article>

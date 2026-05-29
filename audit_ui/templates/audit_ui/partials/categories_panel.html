@@ -13,6 +13,16 @@
     <div><span>Confiantes</span><strong>{{ category_totals.confident }}</strong></div>
     <div><span>Pedem RAG</span><strong>{{ category_totals.needs_rag }}</strong></div>
   </div>
+  <form class="table-controls" method="get" action="{{ current_path }}">
+    <input type="search" name="categories_q" value="{{ category_table.filters.q }}" placeholder="Buscar categoria ou nome canônico">
+    <select name="categories_needs_rag" aria-label="Filtro RAG">
+      <option value="">Todos</option>
+      <option value="1" {% if category_table.filters.needs_rag == "1" %}selected{% endif %}>Pedem RAG</option>
+      <option value="0" {% if category_table.filters.needs_rag == "0" %}selected{% endif %}>Sem RAG</option>
+    </select>
+    <button class="button primary" type="submit">Filtrar</button>
+    <a class="button ghost" href="{{ current_path }}">Limpar</a>
+  </form>
   <div class="table-scroll">
     <div class="data-table categories-table" role="table" aria-label="Categorias candidatas">
       <div class="table-row table-head-row" role="row">
@@ -21,7 +31,7 @@
         <span>Confiança</span>
         <span>RAG</span>
       </div>
-      {% for category in categories %}
+      {% for category in category_table.rows %}
         <div class="table-row" role="row">
           <strong>{{ category.category }}</strong>
           <span>{{ category.item_count }}</span>
@@ -33,4 +43,5 @@
       {% endfor %}
     </div>
   </div>
+  {% include "audit_ui/partials/pagination.html" with table=category_table %}
 </article>
