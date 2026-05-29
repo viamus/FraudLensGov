@@ -85,6 +85,15 @@ svg {
   border-right: 1px solid var(--line);
 }
 
+.sidebar-head {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -103,6 +112,9 @@ svg {
   background: #121925;
   color: var(--accent);
   font-weight: 900;
+  font-size: 13px;
+  line-height: 1;
+  text-align: center;
 }
 
 .brand-copy,
@@ -204,6 +216,22 @@ svg {
   display: none;
 }
 
+.sidebar-collapsed .sidebar-head {
+  display: block;
+  min-height: 84px;
+  padding-top: 44px;
+}
+
+.sidebar-collapsed .brand {
+  justify-content: center;
+}
+
+.sidebar-collapsed .sidebar-toggle {
+  position: absolute;
+  top: 0;
+  right: 7px;
+}
+
 .sidebar-collapsed .menu-item {
   justify-content: center;
 }
@@ -215,14 +243,56 @@ svg {
   flex-direction: column;
 }
 
-.commandbar {
+.app-topbar {
   position: sticky;
   top: 0;
-  z-index: 5;
+  z-index: 7;
+  min-height: 44px;
+  padding: 8px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: rgba(9, 11, 15, .96);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(14px);
+}
+
+.app-topbar div {
+  min-width: 0;
+}
+
+.app-topbar span {
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.app-topbar strong {
+  display: block;
+  margin-top: 1px;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.topbar-meta {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.commandbar {
+  position: sticky;
+  top: 44px;
+  z-index: 6;
   min-height: 84px;
   padding: 16px 22px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
   background: rgba(9, 11, 15, .9);
@@ -685,6 +755,9 @@ svg {
 }
 
 .app-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
   min-height: 42px;
   padding: 10px 22px;
   display: flex;
@@ -732,7 +805,12 @@ svg {
 
   .commandbar {
     position: static;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-topbar,
+  .app-footer {
+    position: static;
   }
 
   .command-actions {

@@ -23,12 +23,17 @@
 
   <div class="app-frame" data-shell>
     <aside class="sidebar" aria-label="Menu principal">
-      <div class="brand">
-        <div class="brand-mark">FG</div>
-        <div class="brand-copy">
-          <strong>FraudLensGov</strong>
-          <span>Audit console</span>
+      <div class="sidebar-head">
+        <div class="brand">
+          <div class="brand-mark">FG</div>
+          <div class="brand-copy">
+            <strong>FraudLensGov</strong>
+            <span>Audit console</span>
+          </div>
         </div>
+        <button class="icon-button sidebar-toggle" type="button" data-sidebar-toggle aria-label="Alternar menu" aria-expanded="true">
+          <svg><use href="#i-menu"></use></svg>
+        </button>
       </div>
       <nav class="main-menu">
         {% for item in nav_items %}
@@ -45,10 +50,18 @@
     </aside>
 
     <div class="page">
+      <header class="app-topbar">
+        <div>
+          <span>FraudLensGov</span>
+          <strong>Console de auditoria pública</strong>
+        </div>
+        <div class="topbar-meta">
+          <span>SQLite local</span>
+          <span>Bronze / Silver / Golden</span>
+        </div>
+      </header>
+
       <header class="commandbar">
-        <button class="icon-button" type="button" data-sidebar-toggle aria-label="Alternar menu" aria-expanded="true">
-          <svg><use href="#i-menu"></use></svg>
-        </button>
         <div class="page-heading">
           <p class="eyebrow">Investigação</p>
           <h1>{{ alert.display_title }}</h1>
